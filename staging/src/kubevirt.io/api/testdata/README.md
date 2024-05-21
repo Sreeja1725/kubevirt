@@ -2,7 +2,7 @@
 
 This directory tree contains serialized API objects in json and yaml formats.
 
-This creates JSON and YAML files for all the API exposed by kubevirt in group-version "kubevirt.io/v1", versioned by the release. The current version is in `HEAD` directory, previous versions are in `release-0.yy` releasedirectory. APIs includes, more APIs can be added in the future:
+This creates JSON and YAML files for three APIs exposed by kubevirt in group-version "kubevirt.io/v1", versioned by the release. The main branch is will be stored in `HEAD` directory, previous versions are in `release-0.yy` release directory. While more APIs can be added in the future, the current list includes:
   ```
     VirtualMachineInstance
     VirtualMachine
@@ -38,7 +38,8 @@ HEAD/
 To run serialization tests just for the current version:
 
 ```sh
-go test staging/src/kubevirt.io/api -run //HEAD
+cd staging/src/kubevirt.io/api
+go test ./ -run //HEAD
 ```
 
 All the formats of a given group/version/kind are expected to decode successfully to identical objects,
@@ -46,7 +47,8 @@ and to round-trip back to serialized form with identical bytes.
 Adding new fields or deprecating new fields or API types *is* expected to modify these fixtures. To regenerate them, run:
 
 ```sh
-UPDATE_COMPATIBILITY_FIXTURE_DATA=true go test staging/src/kubevirt.io/api -run //HEAD
+cd staging/src/kubevirt.io/api
+UPDATE_COMPATIBILITY_FIXTURE_DATA=true go test ./ -run //HEAD
 ```
 
 ### Previous versions
@@ -61,12 +63,13 @@ release-X.Y
 To run serialization tests for a previous version, like `v1.1.0`:
 
 ```sh
-go test staging/src/kubevirt.io/api -run //release-1.1
+cd staging/src/kubevirt.io/api
+go test ./ -run //release-1.1
 ```
 
 To run serialization tests for a particular group/version/kind, like `apps/v1` `Deployment`:
 ```sh
-go test staging/src/kubevirt.io/api -run /apps.v1.Deployment/
+go test ./ -run /apps.v1.Deployment/
 ```
 
 Example output:
@@ -125,9 +128,9 @@ The above output shows that for VirtualMachineInstance:
 2. api-field: `status.runtimeUser` field was added[ref-3](https://github.com/kubevirt/kubevirt/pull/6709)
 
 
-## REVIEWRS GUIDE
+## REVIEWERS GUIDE
 
-Upon upgrade to API, the json and YAML files will be updated.
+With any change in go structs of the APIs, the corresponding JSON and YAML files will be updated.
 
 When decoding, round-tripping identical bytes, or decoding identical objects from JSON/YAML, failures trigger detailed error outputs.
 These errors specify the differences found during the comparison.

@@ -235,9 +235,13 @@ lint-metrics:
 	./hack/prom-metric-linter/metric_name_linter.sh --operator-name="kubevirt" --sub-operator-name="kubevirt" --metrics-file=metrics.json
 	rm metrics.json
 
-gofumpt:
-	./hack/dockerized "hack/gofumpt.sh"
+update-generate-api-testdata:
+	rm -f staging/src/kubevirt.io/api/testdata/HEAD/*.{yaml,json}
+	hack/dockerized "cd staging/src/kubevirt.io/api && UPDATE_COMPATIBILITY_FIXTURE_DATA=true go test ./ -run //HEAD >/dev/null 2>&1 || true && go test ./ -run //HEAD -count=1"
 
+test-api-compat:
+	hack/dockerized "cd staging/src/kubevirt.io/api && go test ./ -run TestCompatibility "
+    
 .PHONY: \
 	build-verify \
 	conformance \
@@ -274,5 +278,7 @@ gofumpt:
 	format \
 	fmt \
 	lint \
-	lint-metrics\
+	lint-metrics \
+	update-generate-api-testdata \
+	test-api-compat \
 	$(NULL)
