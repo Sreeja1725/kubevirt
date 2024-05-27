@@ -20,6 +20,7 @@
 package libvmi
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "kubevirt.io/api/core/v1"
 	instancetypeapi "kubevirt.io/api/instancetype"
@@ -47,7 +48,10 @@ func NewVirtualMachine(vmi *v1.VirtualMachineInstance, opts ...VMOption) *v1.Vir
 					Annotations: vmi.ObjectMeta.Annotations,
 					Labels:      vmi.ObjectMeta.Labels,
 				},
-				Spec: vmi.Spec,
+				Spec: v1.VirtualMachineInstanceSpec{
+					NodeSelector: map[string]string{},
+					Tolerations:  []corev1.Toleration{},
+				},
 			},
 		},
 	}
@@ -62,6 +66,18 @@ func NewVirtualMachine(vmi *v1.VirtualMachineInstance, opts ...VMOption) *v1.Vir
 func WithRunning() VMOption {
 	return func(vm *v1.VirtualMachine) {
 		vm.Spec.Running = pointer.P(true)
+	}
+}
+
+func WithNodeSelector(selector map[string]string) VMOption {
+	return func(vm *v1.VirtualMachine) {
+		vm.Spec.Template.Spec.NodeSelector = selector
+	}
+}
+
+func WithNodeToleration(toleration corev1.Toleration) VMOption {
+	return func(vm *v1.VirtualMachine) {
+		vm.Spec.Template.Spec.Tolerations = append(vm.Spec.Template.Spec.Tolerations, toleration)
 	}
 }
 

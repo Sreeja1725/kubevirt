@@ -105,6 +105,7 @@ const (
 	ResultTypeVMIDeletionToFailedP99    ResultType = "vmiDeletionToFailedSecondsP99"
 	ResultTypeVMIDeletionToFailedP95    ResultType = "vmiDeletionToFailedSecondsP95"
 	ResultTypeVMIDeletionToFailedP50    ResultType = "vmiDeletionToFailedSecondsP50"
+	ResultTypeAvgVirtAPICPUUsage        ResultType = "avgVirtAPICPUUsage"
 )
 
 const (

@@ -49,7 +49,11 @@ const (
 //
 //	at all times.
 const (
-	vmiPhaseCount = `sum by (phase) (kubevirt_vmi_phase_count{})`
+	vmiPhaseCount             = `sum by (phase) (kubevirt_vmi_phase_count{})`
+	avgVirtAPIMemUsage        = `avg(sum(container_memory_working_set_bytes{namespace="kubevirt", pod=~"virt-api.*", container!="POD", container!=""}) by (pod))`
+	avgVirtAPICPUUsage        = `avg(sum(node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate{namespace="kubevirt",pod=~"virt-api.*", container!="",container!="POD"}) by (pod))`
+	avgVirtControllerCPUUsage = `avg(sum(node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate{namespace="kubevirt",pod=~"virt-controller.*", container!="",container!="POD"}) by (pod))`
+	avgVirtControllerMemUsage = `avg(sum(container_memory_working_set_bytes{namespace="kubevirt", pod=~"virt-controller.*", container!="POD", container!=""}) by (pod))`
 )
 
 type percentile struct {
@@ -277,6 +281,30 @@ func (m *MetricClient) getTimePercentilesFromQuery(r *audit_api.Result, rangeVec
 	return nil
 }
 
+func (m *MetricClient) getVirtApiCPUusage(r *audit_api.Result) error {
+	query := avgVirtAPICPUUsage
+
+	val, err := m.query(query)
+	if err != nil {
+		return err
+	}
+
+	results, err := parseVector(val)
+	if err != nil {
+		return err
+	}
+
+	for _, result := range results {
+		key := audit_api.ResultType(audit_api.ResultTypeAvgVirtAPICPUUsage)
+
+		r.Values[key] = audit_api.ResultValue{
+			Value: result.value,
+		}
+	}
+
+	return nil
+}
+
 func (m *MetricClient) getPhaseBreakdown(r *audit_api.Result) error {
 	query := vmiPhaseCount
 
@@ -384,6 +412,11 @@ func (m *MetricClient) gatherMetrics() (*audit_api.Result, error) {
 	}
 
 	err = m.getPhaseBreakdown(r)
+	if err != nil {
+		return nil, err
+	}
+
+	err = m.getVirtApiCPUusage(r)
 	if err != nil {
 		return nil, err
 	}
