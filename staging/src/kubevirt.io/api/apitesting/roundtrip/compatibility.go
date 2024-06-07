@@ -33,7 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/apimachinery/pkg/util/sets"
-	kubevirtv1 "kubevirt.io/api/core/v1"
+	v1 "kubevirt.io/api/core/v1"
 )
 
 // This tests are largely take from k8s apitesting, in the future when it is possible it could be imported directly:
@@ -142,11 +142,11 @@ func (c *CompatibilityTestOptions) Complete(t *testing.T) *CompatibilityTestOpti
 				// omit list types
 				continue
 			}
-			if gvk.Group != kubevirtv1.GroupVersion.Group && coreKinds.Has(gvk.Kind) {
+			if gvk.Group != v1.GroupVersion.Group && coreKinds.Has(gvk.Kind) {
 				// only test options types in the core API group
 				continue
 			}
-			if gvk == kubevirtv1.VirtualMachineInstanceMigrationGroupVersionKind || gvk == kubevirtv1.VirtualMachineInstancePresetGroupVersionKind || gvk == kubevirtv1.VirtualMachineInstanceReplicaSetGroupVersionKind {
+			if gvk == v1.VirtualMachineInstanceMigrationGroupVersionKind || gvk == v1.VirtualMachineInstancePresetGroupVersionKind || gvk == v1.VirtualMachineInstanceReplicaSetGroupVersionKind {
 				continue
 			}
 			gvks = append(gvks, gvk)

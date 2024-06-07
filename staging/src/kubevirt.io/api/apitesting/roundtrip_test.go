@@ -14,15 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package root
+package apitesting
 
 import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"kubevirt.io/api/apitesting/roundtrip"
 	kubevirtv1 "kubevirt.io/api/core/v1"
-	"kubevirt.io/api/roundtrip"
 )
 
 var groups = []runtime.SchemeBuilder{

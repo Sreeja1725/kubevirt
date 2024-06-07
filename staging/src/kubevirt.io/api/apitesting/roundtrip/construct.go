@@ -30,6 +30,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
+// This tests are largely take from k8s apitesting, in the future when it is possible it could be imported directly:
+// https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apimachinery/pkg/api/apitesting/roundtrip/construct.go
+
 func defaultFillFuncs() map[reflect.Type]FillFunc {
 	funcs := map[reflect.Type]FillFunc{}
 	funcs[reflect.TypeOf(&runtime.RawExtension{})] = func(s string, i int, obj interface{}) {
