@@ -141,6 +141,9 @@ var _ = ReportBeforeSuite(func(report Report) {
 })
 
 var _ = JustAfterEach(func() {
+	if flags.DeployFakeKwokNodesFlag {
+		return
+	}
 	k8sReporter.ReportSpec(CurrentSpecReport())
 })
 

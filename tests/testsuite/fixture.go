@@ -31,11 +31,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 
 	k8sv1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	v1 "kubevirt.io/api/core/v1"
+	"kubevirt.io/client-go/kubecli"
 	"kubevirt.io/client-go/log"
 
 	"kubevirt.io/kubevirt/pkg/libvmi"
@@ -54,6 +56,7 @@ const (
 	defaultEventuallyTimeout         = 5 * time.Second
 	defaultEventuallyPollingInterval = 1 * time.Second
 	defaultKubevirtReadyTimeout      = 180 * time.Second
+	nodeCount                        = 100
 )
 
 const HostPathBase = "/tmp/hostImages"
@@ -67,6 +70,10 @@ var Arch string
 
 func SynchronizedAfterTestSuiteCleanup() {
 	RestoreKubeVirtResource()
+
+	if flags.DeployFakeKwokNodesFlag {
+		deleteFakeNodes()
+	}
 
 	libnode.CleanNodes()
 }
@@ -91,6 +98,10 @@ func SynchronizedBeforeTestSetup() []byte {
 	if flags.DeployTestingInfrastructureFlag {
 		WipeTestingInfrastructure()
 		DeployTestingInfrastructure()
+	}
+
+	if flags.DeployFakeKwokNodesFlag {
+		createFakeNodes()
 	}
 
 	EnsureKVMPresent()
@@ -199,6 +210,95 @@ func EnsureKVMPresent() {
 		}, 120*time.Second, 1*time.Second).Should(BeTrue(),
 			"Both KVM devices and vhost-net devices are required for testing, but are not present on cluster nodes")
 	}
+}
+
+func deleteFakeNodes() {
+	virtClient := kubevirt.Client()
+
+	err := virtClient.CoreV1().Nodes().DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: "type=kwok"})
+	Expect(err).NotTo(HaveOccurred(), "failed to delete fake nodes")
+}
+
+// setup fake nodes for KWOK performance test
+func createFakeNodes() {
+	virtClient := kubevirt.Client()
+
+	By("create fake Nodes")
+	createFakeNodesWithKwok(virtClient, nodeCount)
+
+	By("Get the list of nodes")
+	nodeList, err := virtClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: "type=kwok"})
+	Expect(err).NotTo(HaveOccurred(), "Failed to list fake nodes")
+	Expect(nodeList.Items).To(HaveLen(nodeCount))
+
+}
+
+func createFakeNodesWithKwok(virtClient kubecli.KubevirtClient, nodeCount int) {
+	for i := 1; i <= nodeCount; i++ {
+		nodeName := fmt.Sprintf("kwok-node-%d", i)
+		node := newFakeNode(nodeName)
+
+		_, err := virtClient.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create node %s", nodeName))
+	}
+}
+
+func newFakeNode(nodeName string) *k8sv1.Node {
+	node := &k8sv1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nodeName,
+			Labels: map[string]string{
+				"beta.kubernetes.io/arch":       "amd64",
+				"beta.kubernetes.io/os":         "linux",
+				"kubernetes.io/arch":            "amd64",
+				"kubernetes.io/hostname":        nodeName,
+				"kubernetes.io/os":              "linux",
+				"kubernetes.io/role":            "agent",
+				"node-role.kubernetes.io/agent": "",
+				"kubevirt.io/schedulable":       "true",
+				"type":                          "kwok",
+			},
+			Annotations: map[string]string{
+				"node.alpha.kubernetes.io/ttl": "0",
+				"kwok.x-k8s.io/node":           "fake",
+			},
+		},
+		Spec: k8sv1.NodeSpec{
+			Taints: []k8sv1.Taint{
+				{
+					Key:    "kwok.x-k8s.io/node",
+					Value:  "fake",
+					Effect: "NoSchedule",
+				},
+				{
+					Key:    "CriticalAddonsOnly",
+					Effect: k8sv1.TaintEffectNoSchedule,
+				},
+			},
+		},
+		Status: k8sv1.NodeStatus{
+			Allocatable: k8sv1.ResourceList{
+				k8sv1.ResourceCPU:               resource.MustParse("32"),
+				k8sv1.ResourceMemory:            resource.MustParse("256Gi"),
+				k8sv1.ResourceEphemeralStorage:  resource.MustParse("100Gi"),
+				k8sv1.ResourcePods:              resource.MustParse("110"),
+				"devices.kubevirt.io/kvm":       resource.MustParse("1k"),
+				"devices.kubevirt.io/tun":       resource.MustParse("1k"),
+				"devices.kubevirt.io/vhost-net": resource.MustParse("1k"),
+			},
+			Capacity: k8sv1.ResourceList{
+				k8sv1.ResourceCPU:               resource.MustParse("32"),
+				k8sv1.ResourceMemory:            resource.MustParse("256Gi"),
+				k8sv1.ResourceEphemeralStorage:  resource.MustParse("100Gi"),
+				k8sv1.ResourcePods:              resource.MustParse("110"),
+				"devices.kubevirt.io/kvm":       resource.MustParse("1k"),
+				"devices.kubevirt.io/tun":       resource.MustParse("1k"),
+				"devices.kubevirt.io/vhost-net": resource.MustParse("1k"),
+			},
+		},
+	}
+
+	return node
 }
 
 func deployOrWipeTestingInfrastrucure(actionOnObject func(unstructured.Unstructured) error) {

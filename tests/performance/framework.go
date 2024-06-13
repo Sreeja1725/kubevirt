@@ -32,6 +32,7 @@ var (
 	cyclicTestDurationInSeconds uint
 	RunPerfRealtime             bool
 	realtimeThreshold           uint
+	RunKWOKPerfTests            bool
 )
 
 func init() {
@@ -71,4 +72,8 @@ func skipIfNoRealtimePerformanceTests() {
 	if !RunPerfRealtime {
 		Skip("Realtime performance tests are not enabled")
 	}
+}
+
+func KWOKDescribe(text string, args ...interface{}) bool {
+	return Describe(text, Label("KWOK", "sig-performance"), Serial, args)
 }
