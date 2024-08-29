@@ -19,6 +19,7 @@
 package client
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -87,8 +88,8 @@ func parseURLResourceOperation(request *http.Request) (resource string, verb str
 		verb = "GET"
 		if strings.Contains(request.URL.Path, "/watch/") {
 			verb = "WATCH"
-		} else if strings.HasSuffix(request.URL.Path, resource) {
-			// If the resource is the last element in the url, then
+		} else if strings.HasSuffix(request.URL.Path, resource) || strings.Contains(request.URL.Path, fmt.Sprintf("%s?", resource)) {
+			// If the resource is the last element in the url or if it contains query parameters after the resource, then
 			// we're asking to list all resources of that type instead
 			// of getting an individual resource
 			verb = "LIST"
