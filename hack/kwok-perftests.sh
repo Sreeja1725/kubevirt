@@ -68,19 +68,15 @@ function perfaudit() {
     _out/cmd/perfscale-audit/perfscale-audit --config-file=${AUDIT_CONFIG} --results-file=${AUDIT_RESULTS}
 }
 
-if [ -n "$KUBEVIRT_E2E_FOCUS" ]; then
-    export KUBEVIRT_E2E_FOCUS="${KUBEVIRT_E2E_FOCUS}|\\[sig-performance\\]"
+if [ -n "$KUBEVIRT_E2E_LABEL_FILTER" ]; then
+    export KUBEVIRT_E2E_LABEL_FILTER="${KUBEVIRT_E2E_LABEL_FILTER} && sig-performance"
 else
-    export KUBEVIRT_E2E_FOCUS="\\[sig-performance\\]"
+    export KUBEVIRT_E2E_LABEL_FILTER="sig-performance"
 fi
 
 additional_test_args=""
-if [ -n "$KUBEVIRT_E2E_SKIP" ]; then
-    additional_test_args="${additional_test_args} --skip=${KUBEVIRT_E2E_SKIP}"
-fi
-
-if [ -n "$KUBEVIRT_E2E_FOCUS" ]; then
-    additional_test_args="${additional_test_args} --focus=${KUBEVIRT_E2E_FOCUS}"
+if [ -n "$KUBEVIRT_E2E_LABEL_FILTER" ]; then
+    additional_test_args="${additional_test_args} --label-filter=${KUBEVIRT_E2E_LABEL_FILTER}"
 fi
 
 additional_test_args="${additional_test_args} --skip-package test/performance"

@@ -507,7 +507,7 @@ var _ = Describe("[rfe_id:1177][crit:medium][vendor:cnv-qe@redhat.com][level:com
 			Entry("[test_id:6868] when VM scheduling error occurs with unsatisfiable scheduling constraints",
 				libvmi.New(
 					libvmi.WithResourceMemory("128Mi"),
-					libvmi.WithNodeSelectorFor("that-doesnt-exist"),
+					libvmi.WithNodeSelector(k8sv1.LabelHostname, "that-doesnt-exist"),
 				),
 				v1.VirtualMachineStatusUnschedulable,
 			),

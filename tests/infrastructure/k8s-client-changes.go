@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1 "kubevirt.io/api/core/v1"
@@ -103,7 +104,7 @@ var _ = DescribeInfra("changes to the kubernetes client", func() {
 		targetNode := libnode.GetAllSchedulableNodes(virtClient).Items[0]
 		vmi := libvmi.New(
 			libvmi.WithResourceMemory("1Mi"),
-			libvmi.WithNodeSelectorFor(targetNode.Name),
+			libvmi.WithNodeSelector(k8sv1.LabelHostname, targetNode.Name),
 		)
 
 		replicaset := replicaset.New(vmi, 0)

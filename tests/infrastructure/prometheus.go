@@ -235,7 +235,7 @@ var _ = DescribeInfra("[rfe_id:3187][crit:medium][vendor:cnv-qe@redhat.com][leve
 		vmi := libvmifact.NewAlpine(libvmi.WithEmptyDisk("testdisk", v1.VirtIO, resource.MustParse("1G")))
 		if preferredNodeName != "" {
 			vmi = libvmifact.NewAlpine(libvmi.WithEmptyDisk("testdisk", v1.VirtIO, resource.MustParse("1G")),
-				libvmi.WithNodeSelectorFor(preferredNodeName))
+				libvmi.WithNodeSelector(k8sv1.LabelHostname, preferredNodeName))
 		}
 
 		vmi = libvmops.RunVMIAndExpectLaunch(vmi, 30)

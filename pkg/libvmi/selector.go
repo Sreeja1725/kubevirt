@@ -25,17 +25,28 @@ import (
 )
 
 // WithNodeSelectorFor ensures that the VMI gets scheduled on the specified node
-func WithNodeSelectorFor(nodeName string) Option {
+func WithNodeSelector(key, value string) Option {
 	return func(vmi *v1.VirtualMachineInstance) {
 		if vmi.Spec.NodeSelector == nil {
 			vmi.Spec.NodeSelector = map[string]string{}
 		}
-		vmi.Spec.NodeSelector[k8sv1.LabelHostname] = nodeName
+
+		vmi.Spec.NodeSelector[key] = value
 	}
 }
 
 func WithNodeAffinityFor(nodeName string) Option {
 	return WithNodeAffinityForLabel(k8sv1.LabelHostname, nodeName)
+}
+
+func WithToleration(toleration k8sv1.Toleration) Option {
+	return func(vmi *v1.VirtualMachineInstance) {
+		if vmi.Spec.Tolerations == nil {
+			vmi.Spec.Tolerations = make([]k8sv1.Toleration, 0)
+		}
+
+		vmi.Spec.Tolerations = append(vmi.Spec.Tolerations, toleration)
+	}
 }
 
 func WithNodeAffinityForLabel(nodeLabelKey, nodeLabelValue string) Option {

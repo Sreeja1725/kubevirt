@@ -808,7 +808,7 @@ var _ = SIGDescribe("Storage", func() {
 							libvmi.WithResourceMemory("256Mi"),
 							libvmi.WithNetwork(v1.DefaultPodNetwork()),
 							libvmi.WithInterface(libvmi.InterfaceDeviceWithMasqueradeBinding()),
-							libvmi.WithNodeSelectorFor(node))
+							libvmi.WithNodeSelector(k8sv1.LabelHostname, node))
 						vmi = libvmops.RunVMIAndExpectLaunch(vmi, 90)
 
 						By("Checking if disk.img exists")

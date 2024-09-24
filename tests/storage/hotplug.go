@@ -762,7 +762,7 @@ var _ = SIGDescribe("Hotplug", func() {
 				node := findCPUManagerWorkerNode()
 				opts := []libvmi.Option{}
 				if node != "" {
-					opts = append(opts, libvmi.WithNodeSelectorFor(node))
+					opts = append(opts, libvmi.WithNodeSelector(k8sv1.LabelHostname, node))
 				}
 				vmi := libvmifact.NewCirros(opts...)
 
@@ -1705,7 +1705,7 @@ var _ = SIGDescribe("Hotplug", func() {
 
 			opts := []libvmi.Option{}
 			if pvNode != "" {
-				opts = append(opts, libvmi.WithNodeSelectorFor(pvNode))
+				opts = append(opts, libvmi.WithNodeSelector(k8sv1.LabelHostname, pvNode))
 			}
 			vmi := libvmifact.NewCirros(opts...)
 
@@ -1910,7 +1910,7 @@ var _ = SIGDescribe("Hotplug", func() {
 		})
 
 		It("on an online VM", func() {
-			vmi := libvmifact.NewCirros(libvmi.WithNodeSelectorFor(nodeName))
+			vmi := libvmifact.NewCirros(libvmi.WithNodeSelector(k8sv1.LabelHostname, nodeName))
 
 			vm, err = virtClient.VirtualMachine(testsuite.NamespaceTestDefault).Create(context.Background(), libvmi.NewVirtualMachine(vmi, libvmi.WithRunStrategy(v1.RunStrategyAlways)), metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())

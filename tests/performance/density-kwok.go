@@ -1,3 +1,17 @@
+/*
+Copyright 2024 The KubeVirt Authors.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package performance
 
 import (
@@ -12,17 +26,17 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	corev1 "k8s.io/api/core/v1"
+	k8sv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	kubevirtv1 "kubevirt.io/api/core/v1"
+	v1 "kubevirt.io/api/core/v1"
 	"kubevirt.io/client-go/kubecli"
 
 	"kubevirt.io/kubevirt/pkg/libvmi"
 	"kubevirt.io/kubevirt/tests/framework/kubevirt"
 	"kubevirt.io/kubevirt/tests/libvmifact"
-	"kubevirt.io/kubevirt/tests/util"
+	"kubevirt.io/kubevirt/tests/testsuite"
 )
 
 const (
@@ -36,7 +50,7 @@ var (
 	vmCount   = getVMCount()
 )
 
-var _ = SIGDescribe("[KWOK] Control Plane Performance Density Testing using kwok", func() {
+var _ = Describe("Control Plane Performance Density Testing using kwok", Label("KWOK", "sig-performance", "Serial"), Serial, Ordered, func() {
 	var (
 		kubevirtClient kubecli.KubevirtClient
 		k8sClient      *kubernetes.Clientset
@@ -57,14 +71,12 @@ var _ = SIGDescribe("[KWOK] Control Plane Performance Density Testing using kwok
 
 				config, err := kubecli.GetKubevirtClientConfig()
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "failed to get client config: %v\n", err)
-					return
+					Expect(err).NotTo(HaveOccurred())
 				}
 
 				k8sClient, err = kubernetes.NewForConfig(config)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "failed to create k8s client: %v\n", err)
-					panic(err)
+					Expect(err).NotTo(HaveOccurred())
 				}
 
 				By("create fake Nodes")
@@ -73,8 +85,11 @@ var _ = SIGDescribe("[KWOK] Control Plane Performance Density Testing using kwok
 				By("Get the list of nodes")
 				_, err = k8sClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 				if err != nil {
-					log.Fatalf("Failed to list nodes: %v", err)
+					Expect(err).NotTo(HaveOccurred())
 				}
+
+				//wait for 5 mins to bring the metrics to steady state
+				time.Sleep(5 * time.Minute)
 			})
 		})
 
@@ -119,7 +134,7 @@ var _ = SIGDescribe("[KWOK] Control Plane Performance Density Testing using kwok
 					nodeName := fmt.Sprintf("kwok-node-%d", i)
 					err := k8sClient.CoreV1().Nodes().Delete(context.TODO(), nodeName, metav1.DeleteOptions{})
 					if err != nil {
-						log.Fatalf("Failed to delete node %s: %v", nodeName, err)
+						Expect(err).NotTo(HaveOccurred())
 					}
 				}
 			})
@@ -139,8 +154,8 @@ func createFakeNodesWithKwok(k8sClient *kubernetes.Clientset, count int) {
 	}
 }
 
-func createFakeNode(k8sClient *kubernetes.Clientset, nodeName string) *corev1.Node {
-	node := &corev1.Node{
+func createFakeNode(k8sClient *kubernetes.Clientset, nodeName string) *k8sv1.Node {
+	node := &k8sv1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: nodeName,
 			Labels: map[string]string{
@@ -159,8 +174,8 @@ func createFakeNode(k8sClient *kubernetes.Clientset, nodeName string) *corev1.No
 				"kwok.x-k8s.io/node":           "fake",
 			},
 		},
-		Spec: corev1.NodeSpec{
-			Taints: []corev1.Taint{
+		Spec: k8sv1.NodeSpec{
+			Taints: []k8sv1.Taint{
 				{
 					Key:    "kwok.x-k8s.io/node",
 					Value:  "fake",
@@ -168,26 +183,26 @@ func createFakeNode(k8sClient *kubernetes.Clientset, nodeName string) *corev1.No
 				},
 				{
 					Key:    "CriticalAddonsOnly",
-					Effect: corev1.TaintEffectNoSchedule,
+					Effect: k8sv1.TaintEffectNoSchedule,
 				},
 			},
 		},
 
-		Status: corev1.NodeStatus{
-			Allocatable: corev1.ResourceList{
-				corev1.ResourceCPU:              resource.MustParse("32"),
-				corev1.ResourceMemory:           resource.MustParse("256Gi"),
-				corev1.ResourceEphemeralStorage: resource.MustParse("100Gi"),
-				corev1.ResourcePods:             resource.MustParse("110"),
+		Status: k8sv1.NodeStatus{
+			Allocatable: k8sv1.ResourceList{
+				k8sv1.ResourceCPU:               resource.MustParse("32"),
+				k8sv1.ResourceMemory:            resource.MustParse("256Gi"),
+				k8sv1.ResourceEphemeralStorage:  resource.MustParse("100Gi"),
+				k8sv1.ResourcePods:              resource.MustParse("110"),
 				"devices.kubevirt.io/kvm":       resource.MustParse("1k"),
 				"devices.kubevirt.io/tun":       resource.MustParse("1k"),
 				"devices.kubevirt.io/vhost-net": resource.MustParse("1k"),
 			},
-			Capacity: corev1.ResourceList{
-				corev1.ResourceCPU:              resource.MustParse("32"),
-				corev1.ResourceMemory:           resource.MustParse("256Gi"),
-				corev1.ResourceEphemeralStorage: resource.MustParse("100Gi"),
-				corev1.ResourcePods:             resource.MustParse("110"),
+			Capacity: k8sv1.ResourceList{
+				k8sv1.ResourceCPU:               resource.MustParse("32"),
+				k8sv1.ResourceMemory:            resource.MustParse("256Gi"),
+				k8sv1.ResourceEphemeralStorage:  resource.MustParse("100Gi"),
+				k8sv1.ResourcePods:              resource.MustParse("110"),
 				"devices.kubevirt.io/kvm":       resource.MustParse("1k"),
 				"devices.kubevirt.io/tun":       resource.MustParse("1k"),
 				"devices.kubevirt.io/vhost-net": resource.MustParse("1k"),
@@ -202,7 +217,7 @@ func createFakeVMIBatchWithKWOK(kubevirtClient kubecli.KubevirtClient, vmCount i
 	for i := 1; i <= vmCount; i++ {
 		vmi := createFakeVMISpecWithResources()
 
-		_, err := kubevirtClient.VirtualMachineInstance(util.NamespaceTestDefault).Create(context.Background(), vmi, metav1.CreateOptions{})
+		_, err := kubevirtClient.VirtualMachineInstance(testsuite.NamespaceTestDefault).Create(context.Background(), vmi, metav1.CreateOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
 		time.Sleep(100 * time.Millisecond)
@@ -210,13 +225,13 @@ func createFakeVMIBatchWithKWOK(kubevirtClient kubecli.KubevirtClient, vmCount i
 }
 
 func deleteAndVerifyFakeVMIBatch(kubevirtClient kubecli.KubevirtClient, vmCount int, timeout time.Duration) {
-	err := kubevirtClient.VirtualMachineInstance(util.NamespaceTestDefault).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{})
+	err := kubevirtClient.VirtualMachineInstance(testsuite.NamespaceTestDefault).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{})
 	if err != nil {
 		log.Fatal("Failed to delete VMIs")
 	}
 
 	Eventually(func() int {
-		vmis, err := kubevirtClient.VirtualMachineInstance(util.NamespaceTestDefault).List(context.Background(), metav1.ListOptions{})
+		vmis, err := kubevirtClient.VirtualMachineInstance(testsuite.NamespaceTestDefault).List(context.Background(), metav1.ListOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
 		return len(vmis.Items)
@@ -224,13 +239,13 @@ func deleteAndVerifyFakeVMIBatch(kubevirtClient kubecli.KubevirtClient, vmCount 
 }
 
 func deleteAndVerifyFakeVMBatch(kubevirtClient kubecli.KubevirtClient, vmCount int, timeout time.Duration) {
-	err := kubevirtClient.VirtualMachine(util.NamespaceTestDefault).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{})
+	err := kubevirtClient.VirtualMachine(testsuite.NamespaceTestDefault).DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{})
 	if err != nil {
 		log.Fatal("Failed to delete VMs")
 	}
 
 	Eventually(func() int {
-		vmis, err := kubevirtClient.VirtualMachine(util.NamespaceTestDefault).List(context.Background(), metav1.ListOptions{})
+		vmis, err := kubevirtClient.VirtualMachine(testsuite.NamespaceTestDefault).List(context.Background(), metav1.ListOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
 		return len(vmis.Items)
@@ -242,7 +257,7 @@ func createFakeBatchRunningVMWithKwok(virtClient kubecli.KubevirtClient, vmCount
 		vmi := createFakeVMISpecWithResources()
 		vm := libvmi.NewVirtualMachine(vmi, libvmi.WithRunning())
 
-		_, err := virtClient.VirtualMachine(util.NamespaceTestDefault).Create(context.Background(), vm, metav1.CreateOptions{})
+		_, err := virtClient.VirtualMachine(testsuite.NamespaceTestDefault).Create(context.Background(), vm, metav1.CreateOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
 		// interval for throughput control
@@ -250,27 +265,25 @@ func createFakeBatchRunningVMWithKwok(virtClient kubecli.KubevirtClient, vmCount
 	}
 }
 
-func createFakeVMISpecWithResources() *kubevirtv1.VirtualMachineInstance {
+func createFakeVMISpecWithResources() *v1.VirtualMachineInstance {
 	cpuLimit := "100m"
 	memLimit := "90Mi"
 	vmi := libvmifact.NewCirros(
 		libvmi.WithInterface(libvmi.InterfaceDeviceWithMasqueradeBinding()),
-		libvmi.WithNetwork(kubevirtv1.DefaultPodNetwork()),
+		libvmi.WithNetwork(v1.DefaultPodNetwork()),
 		libvmi.WithResourceMemory(memLimit),
 		libvmi.WithLimitMemory(memLimit),
 		libvmi.WithResourceCPU(cpuLimit),
 		libvmi.WithLimitCPU(cpuLimit),
 		libvmi.WithNodeSelector("type", "kwok"),
-		libvmi.WithTolerations([]corev1.Toleration{
-			{
-				Key:      "CriticalAddonsOnly",
-				Operator: corev1.TolerationOpExists,
-			},
-			{
-				Key:      "kwok.x-k8s.io/node",
-				Effect:   corev1.TaintEffectNoSchedule,
-				Operator: corev1.TolerationOpExists,
-			},
+		libvmi.WithToleration(k8sv1.Toleration{
+			Key:      "CriticalAddonsOnly",
+			Operator: k8sv1.TolerationOpExists,
+		}),
+		libvmi.WithToleration(k8sv1.Toleration{
+			Key:      "kwok.x-k8s.io/node",
+			Effect:   k8sv1.TaintEffectNoSchedule,
+			Operator: k8sv1.TolerationOpExists,
 		}),
 	)
 	return vmi
