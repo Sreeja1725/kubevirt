@@ -49,7 +49,6 @@ const (
 //
 //	at all times.
 const (
-	vmiPhaseCount                 = `sum by (phase) (kubevirt_vmi_phase_count{})`
 	vmiCountOnNode                = `sum(kubevirt_vmi_phase_count{node != "<no value>", node != ""}) by (node)`
 	avgVirtAPICPUUsage            = `avg(rate(container_cpu_usage_seconds_total{namespace="kubevirt",pod=~"virt-api.*", container!="",container!="POD"}[%ds]))`
 	avgVirtAPIMemUsageInMB        = `avg(avg_over_time(container_memory_rss{pod=~"virt-api.*", container!="POD", container!=""}[%ds]))/1024/1024`
@@ -61,12 +60,12 @@ const (
 	maxVirtControllerMemUsageInMB = `max(max_over_time(container_memory_rss{pod=~"virt-controller.*", container!="POD", container!=""}[%ds]))/1024/1024`
 	avgVirtControllerCPUUsage     = `max(rate(container_cpu_usage_seconds_total{namespace="kubevirt",pod=~"virt-controller.*", container!="",container!="POD"}[%ds]))`
 	// max_over_time gives the highest memory utilization of the virt-handler pod over time, the outside max, min, avg gives the pods with highest, lowest and average max_over_time values respectively
-	avgVirtHandlerMemUsageInMB = `avg(max_over_time(container_memory_rss{pod=~"virt-handler.*", container="virt-handler"}[%ds]))/1024/1024`
-	maxVirtHandlerMemUsageInMB = `max(max_over_time(container_memory_rss{pod=~"virt-handler.*", container="virt-handler"}[%ds]))/1024/1024`
-	minVirtHandlerMemUsageInMB = `min(max_over_time(container_memory_rss{pod=~"virt-handler.*", container="virt-handler"}[%ds]))/1024/1024`
-	avgVirtHandlerCPUUsage     = `avg(rate(container_cpu_usage_seconds_total{namespace="kubevirt", pod=~"virt-handler.*", container="virt-handler"}[%ds]))`
-	maxVirtHandlerCPUUsage     = `max(rate(container_cpu_usage_seconds_total{namespace="kubevirt", pod=~"virt-handler.*", container="virt-handler"}[%ds]))`
-	minVirtHandlerCPUUsage     = `min(rate(container_cpu_usage_seconds_total{namespace="kubevirt", pod=~"virt-handler.*", container="virt-handler"}[%ds]))`
+	avgVirtHandlerMemUsageInMB = `avg(avg_over_time((sum by (node) (container_memory_rss{pod=~"virt-handler.*", container="virt-handler"}) / sum by (node) (kubevirt_vmi_phase_count{node != "", node != "<no value>"}))[%ds:]))/1024/1024`
+	maxVirtHandlerMemUsageInMB = `max(avg_over_time((sum by (node) (container_memory_rss{pod=~"virt-handler.*", container="virt-handler"}) / sum by (node) (kubevirt_vmi_phase_count{node != "", node != "<no value>"}))[%ds:]))/1024/1024`
+	minVirtHandlerMemUsageInMB = `min(avg_over_time((sum by (node) (container_memory_rss{pod=~"virt-handler.*", container="virt-handler"}) / sum by (node) (kubevirt_vmi_phase_count{node != "", node != "<no value>"}))[%ds:]))/1024/1024`
+	avgVirtHandlerCPUUsage     = `avg((sum(rate(container_cpu_usage_seconds_total{pod=~"virt-handler.*", container="virt-handler"}[%ds])) by (node) / sum by (node) (kubevirt_vmi_phase_count{node != "", node != "<no value>"})))`
+	maxVirtHandlerCPUUsage     = `max((sum(rate(container_cpu_usage_seconds_total{pod=~"virt-handler.*", container="virt-handler"}[%ds])) by (node) / sum by (node) (kubevirt_vmi_phase_count{node != "", node != "<no value>"})))`
+	minVirtHandlerCPUUsage     = `min((sum(rate(container_cpu_usage_seconds_total{pod=~"virt-handler.*", container="virt-handler"}[%ds])) by (node) / sum by (node) (kubevirt_vmi_phase_count{node != "", node != "<no value>"})))`
 )
 
 type metricUsage struct {
@@ -299,43 +298,6 @@ func (m *MetricClient) getTimePercentilesFromQuery(r *audit_api.Result, rangeVec
 	return nil
 }
 
-func (m *MetricClient) getPhaseBreakdown(r *audit_api.Result) error {
-	query := vmiPhaseCount
-
-	val, err := m.query(query)
-	if err != nil {
-		return err
-	}
-
-	results, err := parseVector(val)
-	if err != nil {
-		return err
-	}
-
-	for _, result := range results {
-		if result.value < 1 {
-			continue
-		}
-		phase, ok := result.labels["phase"]
-		if !ok {
-			continue
-		}
-
-		key := audit_api.ResultType(fmt.Sprintf(audit_api.ResultTypePhaseCountFormat, phase))
-
-		val, ok := r.Values[key]
-		if ok {
-			val.Value = val.Value + result.value
-			r.Values[key] = val
-		} else {
-			r.Values[key] = audit_api.ResultValue{
-				Value: result.value,
-			}
-		}
-	}
-	return nil
-}
-
 func (m *MetricClient) getResourceRequestCountsByOperation(r *audit_api.Result, rangeVector time.Duration) error {
 	lookBack := calculateOffset(*m.cfg.EndTime, rangeVector, m.cfg.PrometheusScrapeInterval)
 	query := fmt.Sprintf(resourceRequestCountsByOperation, int(rangeVector.Seconds()), lookBack)
@@ -521,11 +483,6 @@ func (m *MetricClient) gatherMetrics() (*audit_api.Result, error) {
 	}
 
 	err = m.getResourceRequestCountsByOperation(r, rangeVector)
-	if err != nil {
-		return nil, err
-	}
-
-	err = m.getPhaseBreakdown(r)
 	if err != nil {
 		return nil, err
 	}
