@@ -17,7 +17,7 @@
  *
  */
 
-package v1alpha1
+package v1beta1
 
 import (
 	k8sv1 "k8s.io/api/core/v1"
@@ -186,9 +186,9 @@ type VirtualMachinePoolOrderedPolicy struct {
 	// +optional
 	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
 
-	// NodeSelectorRequirementMatcher is a list of node selector requirement for VMs.
+	// NodeSelector is a list of node selector for VMs.
 	// +optional
-	NodeSelectorRequirementMatcher *[]k8sv1.NodeSelectorRequirement `json:"nodeSelectorRequirementMatcher,omitempty"`
+	NodeSelector *[]k8sv1.NodeSelectorRequirement `json:"nodeSelector,omitempty"`
 }
 
 // +k8s:openapi-gen=true
