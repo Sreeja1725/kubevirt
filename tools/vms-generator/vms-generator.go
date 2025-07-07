@@ -37,7 +37,7 @@ import (
 
 	v1 "kubevirt.io/api/core/v1"
 	instancetypev1beta1 "kubevirt.io/api/instancetype/v1beta1"
-	poolv1 "kubevirt.io/api/pool/v1alpha1"
+	poolv1 "kubevirt.io/api/pool/v1beta1"
 
 	"kubevirt.io/kubevirt/pkg/testutils"
 	validating_webhook "kubevirt.io/kubevirt/pkg/virt-api/webhooks/validating-webhook/admitters"
