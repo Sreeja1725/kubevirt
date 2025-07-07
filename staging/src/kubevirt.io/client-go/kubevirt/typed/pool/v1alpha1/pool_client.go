@@ -24,7 +24,7 @@ import (
 	"net/http"
 
 	rest "k8s.io/client-go/rest"
-	v1alpha1 "kubevirt.io/api/pool/v1alpha1"
+	v1alpha1 "kubevirt.io/api/pool/v1beta1"
 	"kubevirt.io/client-go/kubevirt/scheme"
 )
 

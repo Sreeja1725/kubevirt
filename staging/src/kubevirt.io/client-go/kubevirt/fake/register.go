@@ -35,7 +35,7 @@ import (
 	instancetypev1alpha2 "kubevirt.io/api/instancetype/v1alpha2"
 	instancetypev1beta1 "kubevirt.io/api/instancetype/v1beta1"
 	migrationsv1alpha1 "kubevirt.io/api/migrations/v1alpha1"
-	poolv1alpha1 "kubevirt.io/api/pool/v1alpha1"
+	poolv1alpha1 "kubevirt.io/api/pool/v1beta1"
 	snapshotv1alpha1 "kubevirt.io/api/snapshot/v1alpha1"
 	snapshotv1beta1 "kubevirt.io/api/snapshot/v1beta1"
 )

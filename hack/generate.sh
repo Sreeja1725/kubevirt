@@ -17,6 +17,7 @@ swagger-doc -in ${KUBEVIRT_DIR}/staging/src/kubevirt.io/api/instancetype/v1alpha
 swagger-doc -in ${KUBEVIRT_DIR}/staging/src/kubevirt.io/api/instancetype/v1alpha2/types.go
 swagger-doc -in ${KUBEVIRT_DIR}/staging/src/kubevirt.io/api/instancetype/v1beta1/types.go
 swagger-doc -in ${KUBEVIRT_DIR}/staging/src/kubevirt.io/api/pool/v1alpha1/types.go
+swagger-doc -in ${KUBEVIRT_DIR}/staging/src/kubevirt.io/api/pool/v1beta1/types.go
 swagger-doc -in ${KUBEVIRT_DIR}/staging/src/kubevirt.io/api/migrations/v1alpha1/types.go
 swagger-doc -in ${KUBEVIRT_DIR}/staging/src/kubevirt.io/api/export/v1alpha1/types.go
 swagger-doc -in ${KUBEVIRT_DIR}/staging/src/kubevirt.io/api/export/v1beta1/types.go
@@ -35,6 +36,7 @@ deepcopy-gen \
     kubevirt.io/api/instancetype/v1alpha2 \
     kubevirt.io/api/instancetype/v1beta1 \
     kubevirt.io/api/pool/v1alpha1 \
+    kubevirt.io/api/pool/v1beta1 \
     kubevirt.io/api/migrations/v1alpha1 \
     kubevirt.io/api/clone/v1alpha1 \
     kubevirt.io/api/clone/v1beta1 \
@@ -66,6 +68,7 @@ openapi-gen \
     kubevirt.io/api/instancetype/v1beta1 \
     kubevirt.io/api/migrations/v1alpha1 \
     kubevirt.io/api/pool/v1alpha1 \
+    kubevirt.io/api/pool/v1beta1 \
     kubevirt.io/api/snapshot/v1alpha1 \
     kubevirt.io/api/snapshot/v1beta1 \
     kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1

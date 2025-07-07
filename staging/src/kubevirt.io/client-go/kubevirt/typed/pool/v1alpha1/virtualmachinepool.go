@@ -27,7 +27,7 @@ import (
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	gentype "k8s.io/client-go/gentype"
-	v1alpha1 "kubevirt.io/api/pool/v1alpha1"
+	v1alpha1 "kubevirt.io/api/pool/v1beta1"
 	scheme "kubevirt.io/client-go/kubevirt/scheme"
 )
 
