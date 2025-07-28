@@ -20153,6 +20153,22 @@ var CRDsValidation map[string]string = map[string]string{
           description: ScaleInStrategy specifies how the VMPool controller manages
             scaling in VMs within a VMPool
           properties:
+            opportunistic:
+              description: Opportunistic scale-in of VMs which are in a halted state
+              properties:
+                enableOpportunisticScaleIn:
+                  description: EnableOpportunisticScaleIn specifies if the opportunistic
+                    scale-in strategy is enabled
+                  type: boolean
+                statePreservation:
+                  description: Specifies if and how to preserve state of VMs selected
+                    for scale-in
+                  enum:
+                  - Disabled
+                  - Offline
+                  - Online
+                  type: string
+              type: object
             proactive:
               description: Proactive scale-in by forcing VMs to shutdown during scale-in
                 (Default)
@@ -20169,6 +20185,14 @@ var CRDsValidation map[string]string = map[string]string{
                       - DescendingOrder
                       type: string
                   type: object
+                statePreservation:
+                  description: Specifies if and how to preserve state of VMs selected
+                    for scale-in
+                  enum:
+                  - Disabled
+                  - Offline
+                  - Online
+                  type: string
               type: object
           type: object
         selector:

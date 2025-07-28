@@ -18884,6 +18884,20 @@
      }
     }
    },
+   "v1alpha1.VirtualMachinePoolOpportunisticScaleInStrategy": {
+    "description": "VirtualMachinePoolOpportunisticScaleInStrategy represents opportunistic scale-in strategy",
+    "type": "object",
+    "properties": {
+     "enableOpportunisticScaleIn": {
+      "description": "EnableOpportunisticScaleIn specifies if the opportunistic scale-in strategy is enabled",
+      "type": "boolean"
+     },
+     "statePreservation": {
+      "description": "Specifies if and how to preserve state of VMs selected for scale-in",
+      "type": "string"
+     }
+    }
+   },
    "v1alpha1.VirtualMachinePoolProactiveScaleInStrategy": {
     "description": "VirtualMachinePoolProactiveScaleInStrategy represents proactive scale-in strategy",
     "type": "object",
@@ -18891,6 +18905,10 @@
      "selectionPolicy": {
       "description": "SelectionPolicy defines the priority in which VM instances are selected for proactive scale-in Defaults to \"Random\" base policy when no SelectionPolicy is configured",
       "$ref": "#/definitions/v1alpha1.VirtualMachinePoolSelectionPolicy"
+     },
+     "statePreservation": {
+      "description": "Specifies if and how to preserve state of VMs selected for scale-in",
+      "type": "string"
      }
     }
    },
@@ -18898,6 +18916,10 @@
     "description": "VirtualMachinePoolScaleInStrategy specifies how the VMPool controller manages scaling in VMs within a VMPool",
     "type": "object",
     "properties": {
+     "opportunistic": {
+      "description": "Opportunistic scale-in of VMs which are in a halted state",
+      "$ref": "#/definitions/v1alpha1.VirtualMachinePoolOpportunisticScaleInStrategy"
+     },
      "proactive": {
       "description": "Proactive scale-in by forcing VMs to shutdown during scale-in (Default)",
       "$ref": "#/definitions/v1alpha1.VirtualMachinePoolProactiveScaleInStrategy"

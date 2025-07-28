@@ -59,15 +59,25 @@ func (VirtualMachinePoolList) SwaggerDoc() map[string]string {
 
 func (VirtualMachinePoolScaleInStrategy) SwaggerDoc() map[string]string {
 	return map[string]string{
-		"":          "VirtualMachinePoolScaleInStrategy specifies how the VMPool controller manages scaling in VMs within a VMPool\n+k8s:openapi-gen=true",
-		"proactive": "Proactive scale-in by forcing VMs to shutdown during scale-in (Default)\n+optional",
+		"":              "VirtualMachinePoolScaleInStrategy specifies how the VMPool controller manages scaling in VMs within a VMPool\n+k8s:openapi-gen=true",
+		"opportunistic": "Opportunistic scale-in of VMs which are in a halted state\n+optional",
+		"proactive":     "Proactive scale-in by forcing VMs to shutdown during scale-in (Default)\n+optional",
+	}
+}
+
+func (VirtualMachinePoolOpportunisticScaleInStrategy) SwaggerDoc() map[string]string {
+	return map[string]string{
+		"":                           "VirtualMachinePoolOpportunisticScaleInStrategy represents opportunistic scale-in strategy\n+k8s:openapi-gen=true",
+		"enableOpportunisticScaleIn": "EnableOpportunisticScaleIn specifies if the opportunistic scale-in strategy is enabled\n+optional",
+		"statePreservation":          "Specifies if and how to preserve state of VMs selected for scale-in\n+optional\n+kubebuilder:validation:Enum=Disabled;Offline;Online",
 	}
 }
 
 func (VirtualMachinePoolProactiveScaleInStrategy) SwaggerDoc() map[string]string {
 	return map[string]string{
-		"":                "VirtualMachinePoolProactiveScaleInStrategy represents proactive scale-in strategy\n+k8s:openapi-gen=true",
-		"selectionPolicy": "SelectionPolicy defines the priority in which VM instances are selected for proactive scale-in\nDefaults to \"Random\" base policy when no SelectionPolicy is configured\n+optional",
+		"":                  "VirtualMachinePoolProactiveScaleInStrategy represents proactive scale-in strategy\n+k8s:openapi-gen=true",
+		"selectionPolicy":   "SelectionPolicy defines the priority in which VM instances are selected for proactive scale-in\nDefaults to \"Random\" base policy when no SelectionPolicy is configured\n+optional",
+		"statePreservation": "Specifies if and how to preserve state of VMs selected for scale-in\n+optional\n+kubebuilder:validation:Enum=Disabled;Offline;Online",
 	}
 }
 

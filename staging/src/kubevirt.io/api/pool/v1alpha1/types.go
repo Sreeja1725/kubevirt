@@ -37,6 +37,14 @@ const (
 	VirtualMachinePoolBasePolicyDescendingOrder VirtualMachinePoolBasePolicy = "DescendingOrder"
 )
 
+type StatePreservation string
+
+const (
+	StatePreservationDisabled StatePreservation = "Disabled"
+	StatePreservationOffline  StatePreservation = "Offline"
+	StatePreservationOnline   StatePreservation = "Online"
+)
+
 // VirtualMachinePool resource contains a VirtualMachine configuration
 // that can be used to replicate multiple VirtualMachine resources.
 //
@@ -148,9 +156,26 @@ type VirtualMachinePoolList struct {
 // VirtualMachinePoolScaleInStrategy specifies how the VMPool controller manages scaling in VMs within a VMPool
 // +k8s:openapi-gen=true
 type VirtualMachinePoolScaleInStrategy struct {
+	// Opportunistic scale-in of VMs which are in a halted state
+	// +optional
+	Opportunistic *VirtualMachinePoolOpportunisticScaleInStrategy `json:"opportunistic,omitempty"`
+
 	// Proactive scale-in by forcing VMs to shutdown during scale-in (Default)
 	// +optional
 	Proactive *VirtualMachinePoolProactiveScaleInStrategy `json:"proactive,omitempty"`
+}
+
+// VirtualMachinePoolOpportunisticScaleInStrategy represents opportunistic scale-in strategy
+// +k8s:openapi-gen=true
+type VirtualMachinePoolOpportunisticScaleInStrategy struct {
+	// EnableOpportunisticScaleIn specifies if the opportunistic scale-in strategy is enabled
+	// +optional
+	EnableOpportunisticScaleIn *bool `json:"enableOpportunisticScaleIn,omitempty"`
+
+	// Specifies if and how to preserve state of VMs selected for scale-in
+	// +optional
+	// +kubebuilder:validation:Enum=Disabled;Offline;Online
+	StatePreservation *StatePreservation `json:"statePreservation,omitempty"`
 }
 
 // VirtualMachinePoolProactiveScaleInStrategy represents proactive scale-in strategy
@@ -160,6 +185,11 @@ type VirtualMachinePoolProactiveScaleInStrategy struct {
 	// Defaults to "Random" base policy when no SelectionPolicy is configured
 	// +optional
 	SelectionPolicy *VirtualMachinePoolSelectionPolicy `json:"selectionPolicy,omitempty"`
+
+	// Specifies if and how to preserve state of VMs selected for scale-in
+	// +optional
+	// +kubebuilder:validation:Enum=Disabled;Offline;Online
+	StatePreservation *StatePreservation `json:"statePreservation,omitempty"`
 }
 
 // VirtualMachinePoolSelectionPolicy defines the priority in which VM instances are selected for scale-in
