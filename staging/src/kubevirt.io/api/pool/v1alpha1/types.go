@@ -28,13 +28,17 @@ import (
 )
 
 const (
-	VirtualMachinePoolKind = "VirtualMachinePool"
+	VirtualMachinePoolKind      = "VirtualMachinePool"
+	VirtualMachinePoolFinalizer = "pool.kubevirt.io/finalizer"
 )
 
 const (
 	// Base selection policies
 	VirtualMachinePoolBasePolicyRandom          VirtualMachinePoolBasePolicy = "Random"
+	VirtualMachinePoolBasePolicyOldest          VirtualMachinePoolBasePolicy = "Oldest"
+	VirtualMachinePoolBasePolicyNewest          VirtualMachinePoolBasePolicy = "Newest"
 	VirtualMachinePoolBasePolicyDescendingOrder VirtualMachinePoolBasePolicy = "DescendingOrder"
+	VirtualMachinePoolBasePolicyAscendingOrder  VirtualMachinePoolBasePolicy = "AscendingOrder"
 )
 
 type StatePreservation string
@@ -43,6 +47,13 @@ const (
 	StatePreservationDisabled StatePreservation = "Disabled"
 	StatePreservationOffline  StatePreservation = "Offline"
 	StatePreservationOnline   StatePreservation = "Online"
+)
+
+type ScaleInStrategyType string
+
+const (
+	ScaleInStrategyTypeOpportunistic ScaleInStrategyType = "opportunistic"
+	ScaleInStrategyTypeProactive     ScaleInStrategyType = "proactive"
 )
 
 // VirtualMachinePool resource contains a VirtualMachine configuration
@@ -95,6 +106,9 @@ type VirtualMachinePoolCondition struct {
 
 // +k8s:openapi-gen=true
 type VirtualMachinePoolStatus struct {
+	// LastDesiredReplicas is the desired number of replicas at the time the last scale-in occurred.
+	LastDesiredReplicas int32 `json:"lastDesiredReplicas,omitempty" optional:"true"`
+
 	Replicas int32 `json:"replicas,omitempty" optional:"true"`
 
 	ReadyReplicas int32 `json:"readyReplicas,omitempty" optional:"true"`
@@ -156,6 +170,10 @@ type VirtualMachinePoolList struct {
 // VirtualMachinePoolScaleInStrategy specifies how the VMPool controller manages scaling in VMs within a VMPool
 // +k8s:openapi-gen=true
 type VirtualMachinePoolScaleInStrategy struct {
+	// The VM is never touched after creation. Users are responsible for scaling in the VM manually.
+	// +optional
+	Unmanaged *bool `json:"unmanaged,omitempty"`
+
 	// Opportunistic scale-in of VMs which are in a halted state
 	// +optional
 	Opportunistic *VirtualMachinePoolOpportunisticScaleInStrategy `json:"opportunistic,omitempty"`
@@ -168,9 +186,9 @@ type VirtualMachinePoolScaleInStrategy struct {
 // VirtualMachinePoolOpportunisticScaleInStrategy represents opportunistic scale-in strategy
 // +k8s:openapi-gen=true
 type VirtualMachinePoolOpportunisticScaleInStrategy struct {
-	// EnableOpportunisticScaleIn specifies if the opportunistic scale-in strategy is enabled
+	// Enable specifies if the opportunistic scale-in strategy is enabled
 	// +optional
-	EnableOpportunisticScaleIn *bool `json:"enableOpportunisticScaleIn,omitempty"`
+	Enable *bool `json:"enable,omitempty"`
 
 	// Specifies if and how to preserve state of VMs selected for scale-in
 	// +optional
@@ -195,10 +213,25 @@ type VirtualMachinePoolProactiveScaleInStrategy struct {
 // VirtualMachinePoolSelectionPolicy defines the priority in which VM instances are selected for scale-in
 // +k8s:openapi-gen=true
 type VirtualMachinePoolSelectionPolicy struct {
-	// BasePolicy is a catch-all policy [Random|DescendingOrder]
+	// BasePolicy is a catch-all policy [Random|Oldest|Newest|DescendingOrder|AscendingOrder]
 	// +optional
-	// +kubebuilder:validation:Enum=Random;DescendingOrder
+	// +kubebuilder:validation:Enum=Random;Oldest;Newest;DescendingOrder;AscendingOrder
 	BasePolicy *VirtualMachinePoolBasePolicy `json:"basePolicy,omitempty"`
+
+	// OrderedPolicies is a Ordered list of selection policies. Initial policies include [LabelSelector]. Future policies may include a [NodeSelector] or other selection mechanisms.
+	// +optional
+	OrderedPolicies *VirtualMachinePoolOrderedPolicy `json:"orderedPolicies,omitempty"`
+}
+
+// +k8s:openapi-gen=true
+type VirtualMachinePoolOrderedPolicy struct {
+	// LabelSelector is a list of label selector for VMs.
+	// +optional
+	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
+
+	// NodeSelectorRequirementMatcher is a list of node selector requirement for VMs.
+	// +optional
+	NodeSelectorRequirementMatcher *[]k8sv1.NodeSelectorRequirement `json:"nodeSelectorRequirementMatcher,omitempty"`
 }
 
 // +k8s:openapi-gen=true

@@ -20156,9 +20156,9 @@ var CRDsValidation map[string]string = map[string]string{
             opportunistic:
               description: Opportunistic scale-in of VMs which are in a halted state
               properties:
-                enableOpportunisticScaleIn:
-                  description: EnableOpportunisticScaleIn specifies if the opportunistic
-                    scale-in strategy is enabled
+                enable:
+                  description: Enable specifies if the opportunistic scale-in strategy
+                    is enabled
                   type: boolean
                 statePreservation:
                   description: Specifies if and how to preserve state of VMs selected
@@ -20179,11 +20179,100 @@ var CRDsValidation map[string]string = map[string]string{
                     Defaults to "Random" base policy when no SelectionPolicy is configured
                   properties:
                     basePolicy:
-                      description: BasePolicy is a catch-all policy [Random|DescendingOrder]
+                      description: BasePolicy is a catch-all policy [Random|Oldest|Newest|DescendingOrder|AscendingOrder]
                       enum:
                       - Random
+                      - Oldest
+                      - Newest
                       - DescendingOrder
+                      - AscendingOrder
                       type: string
+                    orderedPolicies:
+                      description: OrderedPolicies is a Ordered list of selection
+                        policies. Initial policies include [LabelSelector]. Future
+                        policies may include a [NodeSelector] or other selection mechanisms.
+                      properties:
+                        labelSelector:
+                          description: LabelSelector is a list of label selector for
+                            VMs.
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of label selector
+                                requirements. The requirements are ANDed.
+                              items:
+                                description: |-
+                                  A label selector requirement is a selector that contains values, a key, and an operator that
+                                  relates the key and values.
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector
+                                      applies to.
+                                    type: string
+                                  operator:
+                                    description: |-
+                                      operator represents a key's relationship to a set of values.
+                                      Valid operators are In, NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      values is an array of string values. If the operator is In or NotIn,
+                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                      the values array must be empty. This array is replaced during a strategic
+                                      merge patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                              x-kubernetes-list-type: atomic
+                            matchLabels:
+                              additionalProperties:
+                                type: string
+                              description: |-
+                                matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                operator is "In", and the values array contains only "value". The requirements are ANDed.
+                              type: object
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        nodeSelectorRequirementMatcher:
+                          description: NodeSelectorRequirementMatcher is a list of
+                            node selector requirement for VMs.
+                          items:
+                            description: |-
+                              A node selector requirement is a selector that contains values, a key, and an operator
+                              that relates the key and values.
+                            properties:
+                              key:
+                                description: The label key that the selector applies
+                                  to.
+                                type: string
+                              operator:
+                                description: |-
+                                  Represents a key's relationship to a set of values.
+                                  Valid operators are In, NotIn, Exists, DoesNotExist. Gt, and Lt.
+                                type: string
+                              values:
+                                description: |-
+                                  An array of string values. If the operator is In or NotIn,
+                                  the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                  the values array must be empty. If the operator is Gt or Lt, the values
+                                  array must have a single element, which will be interpreted as an integer.
+                                  This array is replaced during a strategic merge patch.
+                                items:
+                                  type: string
+                                type: array
+                                x-kubernetes-list-type: atomic
+                            required:
+                            - key
+                            - operator
+                            type: object
+                          type: array
+                      type: object
                   type: object
                 statePreservation:
                   description: Specifies if and how to preserve state of VMs selected
@@ -20194,6 +20283,10 @@ var CRDsValidation map[string]string = map[string]string{
                   - Online
                   type: string
               type: object
+            unmanaged:
+              description: The VM is never touched after creation. Users are responsible
+                for scaling in the VM manually.
+              type: boolean
           type: object
         selector:
           description: |-
@@ -24549,6 +24642,11 @@ var CRDsValidation map[string]string = map[string]string{
           description: Canonical form of the label selector for HPA which consumes
             it through the scale subresource.
           type: string
+        lastDesiredReplicas:
+          description: LastDesiredReplicas is the desired number of replicas at the
+            time the last scale-in occurred.
+          format: int32
+          type: integer
         readyReplicas:
           format: int32
           type: integer

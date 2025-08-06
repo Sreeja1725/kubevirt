@@ -18888,13 +18888,30 @@
     "description": "VirtualMachinePoolOpportunisticScaleInStrategy represents opportunistic scale-in strategy",
     "type": "object",
     "properties": {
-     "enableOpportunisticScaleIn": {
-      "description": "EnableOpportunisticScaleIn specifies if the opportunistic scale-in strategy is enabled",
+     "enable": {
+      "description": "Enable specifies if the opportunistic scale-in strategy is enabled",
       "type": "boolean"
      },
      "statePreservation": {
       "description": "Specifies if and how to preserve state of VMs selected for scale-in",
       "type": "string"
+     }
+    }
+   },
+   "v1alpha1.VirtualMachinePoolOrderedPolicy": {
+    "type": "object",
+    "properties": {
+     "labelSelector": {
+      "description": "LabelSelector is a list of label selector for VMs.",
+      "$ref": "#/definitions/k8s.io.apimachinery.pkg.apis.meta.v1.LabelSelector"
+     },
+     "nodeSelectorRequirementMatcher": {
+      "description": "NodeSelectorRequirementMatcher is a list of node selector requirement for VMs.",
+      "type": "array",
+      "items": {
+       "default": {},
+       "$ref": "#/definitions/k8s.io.api.core.v1.NodeSelectorRequirement"
+      }
      }
     }
    },
@@ -18923,6 +18940,10 @@
      "proactive": {
       "description": "Proactive scale-in by forcing VMs to shutdown during scale-in (Default)",
       "$ref": "#/definitions/v1alpha1.VirtualMachinePoolProactiveScaleInStrategy"
+     },
+     "unmanaged": {
+      "description": "The VM is never touched after creation. Users are responsible for scaling in the VM manually.",
+      "type": "boolean"
      }
     }
    },
@@ -18931,8 +18952,12 @@
     "type": "object",
     "properties": {
      "basePolicy": {
-      "description": "BasePolicy is a catch-all policy [Random|DescendingOrder]",
+      "description": "BasePolicy is a catch-all policy [Random|Oldest|Newest|DescendingOrder|AscendingOrder]",
       "type": "string"
+     },
+     "orderedPolicies": {
+      "description": "OrderedPolicies is a Ordered list of selection policies. Initial policies include [LabelSelector]. Future policies may include a [NodeSelector] or other selection mechanisms.",
+      "$ref": "#/definitions/v1alpha1.VirtualMachinePoolOrderedPolicy"
      }
     }
    },
@@ -18989,6 +19014,11 @@
      "labelSelector": {
       "description": "Canonical form of the label selector for HPA which consumes it through the scale subresource.",
       "type": "string"
+     },
+     "lastDesiredReplicas": {
+      "description": "LastDesiredReplicas is the desired number of replicas at the time the last scale-in occurred.",
+      "type": "integer",
+      "format": "int32"
      },
      "readyReplicas": {
       "type": "integer",

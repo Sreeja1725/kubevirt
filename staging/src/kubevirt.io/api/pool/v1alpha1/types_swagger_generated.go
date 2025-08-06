@@ -26,9 +26,10 @@ func (VirtualMachinePoolCondition) SwaggerDoc() map[string]string {
 
 func (VirtualMachinePoolStatus) SwaggerDoc() map[string]string {
 	return map[string]string{
-		"":              "+k8s:openapi-gen=true",
-		"conditions":    "+listType=atomic",
-		"labelSelector": "Canonical form of the label selector for HPA which consumes it through the scale subresource.",
+		"":                    "+k8s:openapi-gen=true",
+		"lastDesiredReplicas": "LastDesiredReplicas is the desired number of replicas at the time the last scale-in occurred.",
+		"conditions":          "+listType=atomic",
+		"labelSelector":       "Canonical form of the label selector for HPA which consumes it through the scale subresource.",
 	}
 }
 
@@ -60,6 +61,7 @@ func (VirtualMachinePoolList) SwaggerDoc() map[string]string {
 func (VirtualMachinePoolScaleInStrategy) SwaggerDoc() map[string]string {
 	return map[string]string{
 		"":              "VirtualMachinePoolScaleInStrategy specifies how the VMPool controller manages scaling in VMs within a VMPool\n+k8s:openapi-gen=true",
+		"unmanaged":     "The VM is never touched after creation. Users are responsible for scaling in the VM manually.\n+optional",
 		"opportunistic": "Opportunistic scale-in of VMs which are in a halted state\n+optional",
 		"proactive":     "Proactive scale-in by forcing VMs to shutdown during scale-in (Default)\n+optional",
 	}
@@ -67,9 +69,9 @@ func (VirtualMachinePoolScaleInStrategy) SwaggerDoc() map[string]string {
 
 func (VirtualMachinePoolOpportunisticScaleInStrategy) SwaggerDoc() map[string]string {
 	return map[string]string{
-		"":                           "VirtualMachinePoolOpportunisticScaleInStrategy represents opportunistic scale-in strategy\n+k8s:openapi-gen=true",
-		"enableOpportunisticScaleIn": "EnableOpportunisticScaleIn specifies if the opportunistic scale-in strategy is enabled\n+optional",
-		"statePreservation":          "Specifies if and how to preserve state of VMs selected for scale-in\n+optional\n+kubebuilder:validation:Enum=Disabled;Offline;Online",
+		"":                  "VirtualMachinePoolOpportunisticScaleInStrategy represents opportunistic scale-in strategy\n+k8s:openapi-gen=true",
+		"enable":            "Enable specifies if the opportunistic scale-in strategy is enabled\n+optional",
+		"statePreservation": "Specifies if and how to preserve state of VMs selected for scale-in\n+optional\n+kubebuilder:validation:Enum=Disabled;Offline;Online",
 	}
 }
 
@@ -83,7 +85,16 @@ func (VirtualMachinePoolProactiveScaleInStrategy) SwaggerDoc() map[string]string
 
 func (VirtualMachinePoolSelectionPolicy) SwaggerDoc() map[string]string {
 	return map[string]string{
-		"":           "VirtualMachinePoolSelectionPolicy defines the priority in which VM instances are selected for scale-in\n+k8s:openapi-gen=true",
-		"basePolicy": "BasePolicy is a catch-all policy [Random|DescendingOrder]\n+optional\n+kubebuilder:validation:Enum=Random;DescendingOrder",
+		"":                "VirtualMachinePoolSelectionPolicy defines the priority in which VM instances are selected for scale-in\n+k8s:openapi-gen=true",
+		"basePolicy":      "BasePolicy is a catch-all policy [Random|Oldest|Newest|DescendingOrder|AscendingOrder]\n+optional\n+kubebuilder:validation:Enum=Random;Oldest;Newest;DescendingOrder;AscendingOrder",
+		"orderedPolicies": "OrderedPolicies is a Ordered list of selection policies. Initial policies include [LabelSelector]. Future policies may include a [NodeSelector] or other selection mechanisms.\n+optional",
+	}
+}
+
+func (VirtualMachinePoolOrderedPolicy) SwaggerDoc() map[string]string {
+	return map[string]string{
+		"":                               "+k8s:openapi-gen=true",
+		"labelSelector":                  "LabelSelector is a list of label selector for VMs.\n+optional",
+		"nodeSelectorRequirementMatcher": "NodeSelectorRequirementMatcher is a list of node selector requirement for VMs.\n+optional",
 	}
 }

@@ -682,6 +682,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolList":                                       schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolList(ref),
 		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolNameGeneration":                             schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolNameGeneration(ref),
 		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolOpportunisticScaleInStrategy":               schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolOpportunisticScaleInStrategy(ref),
+		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolOrderedPolicy":                              schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolOrderedPolicy(ref),
 		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolProactiveScaleInStrategy":                   schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolProactiveScaleInStrategy(ref),
 		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolScaleInStrategy":                            schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolScaleInStrategy(ref),
 		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolSelectionPolicy":                            schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolSelectionPolicy(ref),
@@ -33230,9 +33231,9 @@ func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolOpportunisticScaleInS
 				Description: "VirtualMachinePoolOpportunisticScaleInStrategy represents opportunistic scale-in strategy",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"enableOpportunisticScaleIn": {
+					"enable": {
 						SchemaProps: spec.SchemaProps{
-							Description: "EnableOpportunisticScaleIn specifies if the opportunistic scale-in strategy is enabled",
+							Description: "Enable specifies if the opportunistic scale-in strategy is enabled",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -33247,6 +33248,40 @@ func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolOpportunisticScaleInS
 				},
 			},
 		},
+	}
+}
+
+func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolOrderedPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"labelSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LabelSelector is a list of label selector for VMs.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
+					"nodeSelectorRequirementMatcher": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeSelectorRequirementMatcher is a list of node selector requirement for VMs.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.NodeSelectorRequirement"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.NodeSelectorRequirement", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
 	}
 }
 
@@ -33285,6 +33320,13 @@ func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolScaleInStrategy(ref c
 				Description: "VirtualMachinePoolScaleInStrategy specifies how the VMPool controller manages scaling in VMs within a VMPool",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
+					"unmanaged": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The VM is never touched after creation. Users are responsible for scaling in the VM manually.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"opportunistic": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Opportunistic scale-in of VMs which are in a halted state",
@@ -33314,14 +33356,22 @@ func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolSelectionPolicy(ref c
 				Properties: map[string]spec.Schema{
 					"basePolicy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BasePolicy is a catch-all policy [Random|DescendingOrder]",
+							Description: "BasePolicy is a catch-all policy [Random|Oldest|Newest|DescendingOrder|AscendingOrder]",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"orderedPolicies": {
+						SchemaProps: spec.SchemaProps{
+							Description: "OrderedPolicies is a Ordered list of selection policies. Initial policies include [LabelSelector]. Future policies may include a [NodeSelector] or other selection mechanisms.",
+							Ref:         ref("kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolOrderedPolicy"),
 						},
 					},
 				},
 			},
 		},
+		Dependencies: []string{
+			"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolOrderedPolicy"},
 	}
 }
 
@@ -33390,6 +33440,13 @@ func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolStatus(ref common.Ref
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
+					"lastDesiredReplicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LastDesiredReplicas is the desired number of replicas at the time the last scale-in occurred.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"replicas": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"integer"},
