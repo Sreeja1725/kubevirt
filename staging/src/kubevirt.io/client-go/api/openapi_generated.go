@@ -33361,7 +33361,7 @@ func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolSelectionPolicy(ref c
 							Format:      "",
 						},
 					},
-					"orderedPolicy": {
+					"orderedPolicies": {
 						SchemaProps: spec.SchemaProps{
 							Description: "OrderedPolicies is a Ordered list of selection policies. Initial policies include [LabelSelector]. Future policies may include a [NodeSelector] or other selection mechanisms.",
 							Ref:         ref("kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolOrderedPolicy"),

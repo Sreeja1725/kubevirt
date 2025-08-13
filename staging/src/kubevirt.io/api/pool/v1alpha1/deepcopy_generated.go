@@ -258,8 +258,8 @@ func (in *VirtualMachinePoolSelectionPolicy) DeepCopyInto(out *VirtualMachinePoo
 		*out = new(VirtualMachinePoolBasePolicy)
 		**out = **in
 	}
-	if in.OrderedPolicy != nil {
-		in, out := &in.OrderedPolicy, &out.OrderedPolicy
+	if in.OrderedPolicies != nil {
+		in, out := &in.OrderedPolicies, &out.OrderedPolicies
 		*out = new(VirtualMachinePoolOrderedPolicy)
 		(*in).DeepCopyInto(*out)
 	}

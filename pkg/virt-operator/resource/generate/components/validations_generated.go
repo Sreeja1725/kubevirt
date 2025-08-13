@@ -20188,7 +20188,7 @@ var CRDsValidation map[string]string = map[string]string{
                       - Oldest
                       - Newest
                       type: string
-                    orderedPolicy:
+                    orderedPolicies:
                       description: OrderedPolicies is a Ordered list of selection
                         policies. Initial policies include [LabelSelector]. Future
                         policies may include a [NodeSelector] or other selection mechanisms.

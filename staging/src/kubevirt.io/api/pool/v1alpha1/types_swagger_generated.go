@@ -84,9 +84,9 @@ func (VirtualMachinePoolProactiveScaleInStrategy) SwaggerDoc() map[string]string
 
 func (VirtualMachinePoolSelectionPolicy) SwaggerDoc() map[string]string {
 	return map[string]string{
-		"":              "VirtualMachinePoolSelectionPolicy defines the priority in which VM instances are selected for scale-in\n+k8s:openapi-gen=true",
-		"basePolicy":    "BasePolicy is a catch-all policy [Random|DescendingOrder|AscendingOrder|Oldest|Newest].\n+optional\n+kubebuilder:validation:Enum=Random;DescendingOrder;AscendingOrder;Oldest;Newest",
-		"orderedPolicy": "OrderedPolicies is a Ordered list of selection policies. Initial policies include [LabelSelector]. Future policies may include a [NodeSelector] or other selection mechanisms.\n+optional",
+		"":                "VirtualMachinePoolSelectionPolicy defines the priority in which VM instances are selected for scale-in\n+k8s:openapi-gen=true",
+		"basePolicy":      "BasePolicy is a catch-all policy [Random|DescendingOrder|AscendingOrder|Oldest|Newest].\n+optional\n+kubebuilder:validation:Enum=Random;DescendingOrder;AscendingOrder;Oldest;Newest",
+		"orderedPolicies": "OrderedPolicies is a Ordered list of selection policies. Initial policies include [LabelSelector]. Future policies may include a [NodeSelector] or other selection mechanisms.\n+optional",
 	}
 }
 
