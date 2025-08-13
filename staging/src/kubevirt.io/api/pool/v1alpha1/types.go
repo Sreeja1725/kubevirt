@@ -209,7 +209,7 @@ type VirtualMachinePoolSelectionPolicy struct {
 
 	// OrderedPolicies is a Ordered list of selection policies. Initial policies include [LabelSelector]. Future policies may include a [NodeSelector] or other selection mechanisms.
 	// +optional
-	OrderedPolicy *VirtualMachinePoolOrderedPolicy `json:"orderedPolicy,omitempty"`
+	OrderedPolicies *VirtualMachinePoolOrderedPolicy `json:"orderedPolicies,omitempty"`
 }
 
 // +k8s:openapi-gen=true
