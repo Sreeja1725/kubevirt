@@ -483,7 +483,7 @@ func (c *Controller) calcDiff(pool *poolv1.VirtualMachinePool, vms []*virtv1.Vir
 	return len(vms) - int(wantedReplicas)
 }
 
-func filterNotDeletingVMs(vms []*virtv1.VirtualMachine) []*virtv1.VirtualMachine {
+func filterRunningVMs(vms []*virtv1.VirtualMachine) []*virtv1.VirtualMachine {
 	filtered := []*virtv1.VirtualMachine{}
 	for _, vm := range vms {
 		if vm.DeletionTimestamp == nil {
@@ -601,62 +601,6 @@ func sortVMsByCreationTimestampAscending(vms []*virtv1.VirtualMachine) {
 	})
 }
 
-func sortVMsByCreationTimestampDescending(vms []*virtv1.VirtualMachine) {
-	sort.Slice(vms, func(i, j int) bool {
-		return vms[j].CreationTimestamp.Before(&vms[i].CreationTimestamp)
-	})
-}
-
-func sortVMsByCreationTimestampAscending(vms []*virtv1.VirtualMachine) {
-	sort.Slice(vms, func(i, j int) bool {
-		return vms[i].CreationTimestamp.Before(&vms[j].CreationTimestamp)
-	})
-}
-
-func filterVMsBasedOnOrderedPolicies(vms []*virtv1.VirtualMachine, orderedPolicies poolv1.VirtualMachinePoolOrderedPolicy) ([]*virtv1.VirtualMachine, error) {
-	var labelSelector labels.Selector
-	var nodeSelector labels.Selector
-	var err error
-
-	if orderedPolicies.LabelSelector != nil {
-		labelSelector, err = metav1.LabelSelectorAsSelector(orderedPolicies.LabelSelector)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse label selector from pool: %v", err)
-		}
-	}
-
-	if orderedPolicies.NodeSelectorRequirementMatcher != nil {
-		nodeSelector, err = utils.NodeSelectorRequirementsAsSelector(orderedPolicies.NodeSelectorRequirementMatcher)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse node selector from pool: %v", err)
-		}
-	}
-
-	if labelSelector == nil && nodeSelector == nil {
-		log.Log.Infof("no label or node selector found, returning all VMs")
-		return vms, nil
-	}
-
-	filteredVms := make([]*virtv1.VirtualMachine, 0, len(vms))
-	for _, vm := range vms {
-		labelMatch := true
-		nodeMatch := true
-		if labelSelector != nil {
-			labelMatch = labelSelector.Matches(labels.Set(vm.Spec.Template.ObjectMeta.Labels))
-		}
-
-		if nodeSelector != nil {
-			nodeMatch = nodeSelector.Matches(labels.Set(vm.Spec.Template.Spec.NodeSelector))
-		}
-
-		if labelMatch && nodeMatch {
-			filteredVms = append(filteredVms, vm)
-		}
-	}
-
-	return filteredVms, nil
-}
-
 func sortVMsRandom(vms []*virtv1.VirtualMachine) {
 	rand.Shuffle(len(vms), func(i, j int) {
 		vms[i], vms[j] = vms[j], vms[i]
@@ -717,7 +661,7 @@ func (c *Controller) scaleIn(pool *poolv1.VirtualMachinePool, vms []*virtv1.Virt
 		return err
 	}
 
-	eligibleVMs := filterNotDeletingVMs(vms)
+	eligibleVMs := filterRunningVMs(vms)
 	// make sure we count already deleting VMs here during scale in.
 	count = count - (len(vms) - len(eligibleVMs))
 
