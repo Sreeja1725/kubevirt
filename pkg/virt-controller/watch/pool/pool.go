@@ -1493,6 +1493,20 @@ func (c *Controller) execute(key string) error {
 		return err
 	}
 
+	if pool.Spec.AutoHealing != nil && *pool.Spec.AutoHealing {
+		vmsToCleanup := filterVMs(vms, func(vm *virtv1.VirtualMachine) bool {
+			return vm.Status.StartFailure != nil && vm.Status.StartFailure.ConsecutiveFailCount >= 3
+		})
+
+		if len(vmsToCleanup) > 0 {
+			for _, vm := range vmsToCleanup {
+				if err := c.cleanupVM(vm); err != nil {
+					logger.Reason(err).Error("Failed to cleanup VM.")
+					return err
+				}
+			}
+		}
+	}
 	// If any adoptions are attempted, we should first recheck for deletion with
 	// an uncached quorum read sometime after listing VirtualMachines (see kubernetes/kubernetes#42639).
 	canAdoptFunc := controller.RecheckDeletionTimestamp(func() (metav1.Object, error) {
@@ -1930,4 +1944,17 @@ func (c *Controller) addPoolFinalizer(pool *poolv1.VirtualMachinePool) error {
 
 	_, err = c.clientset.VirtualMachinePool(pool.Namespace).Patch(context.Background(), pool.Name, types.JSONPatchType, patch, metav1.PatchOptions{})
 	return err
+}
+
+func (c *Controller) cleanupVM(vm *virtv1.VirtualMachine) error {
+	if err := c.removeFinalizer(vm); err != nil {
+		log.Log.Object(vm).Errorf("Failed to remove finalizer: %v", err)
+		return err
+	}
+
+	if err := c.clientset.VirtualMachine(vm.Namespace).Delete(context.Background(), vm.Name, metav1.DeleteOptions{PropagationPolicy: pointer.P(metav1.DeletePropagationForeground)}); err != nil {
+		log.Log.Object(vm).Errorf("Failed to delete VM: %v", err)
+		return err
+	}
+	return nil
 }
