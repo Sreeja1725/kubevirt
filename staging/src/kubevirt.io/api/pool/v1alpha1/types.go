@@ -136,6 +136,9 @@ type VirtualMachinePoolSpec struct {
 	// UpdateStrategy specifies how the VMPool controller manages updating VMs within a VMPool
 	// +optional
 	UpdateStrategy *VirtualMachinePoolUpdateStrategy `json:"updateStrategy,omitempty"`
+	// Autohealing specifies when a VMpool should replace a failing VM with a reprovisioned instance
+	// +optional
+	Autohealing *bool `json:"autohealing,omitempty"`
 }
 
 // +k8s:openapi-gen=true
