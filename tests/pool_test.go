@@ -363,8 +363,11 @@ var _ = Describe("[sig-compute]VirtualMachinePool", decorators.SigCompute, func(
 
 	})
 
-	It("should roll out VM template changes without impacting VMI", func() {
+	It("[pool]should roll out VM template changes without impacting VMI, when update strategy is set to opportunistic", func() {
 		newPool := newVirtualMachinePool()
+		newPool.Spec.UpdateStrategy = &poolv1.VirtualMachinePoolUpdateStrategy{
+			Opportunistic: pointer.P(true),
+		}
 		doScale(newPool.Name, 1)
 		waitForVMIs(newPool.Namespace, newPool.Spec.Selector, 1)
 
@@ -394,7 +397,6 @@ var _ = Describe("[sig-compute]VirtualMachinePool", decorators.SigCompute, func(
 
 		By("Ensuring VM picks up label")
 		Eventually(func() error {
-
 			vm, err := virtClient.VirtualMachine(newPool.Namespace).Get(context.Background(), name, metav1.GetOptions{})
 			if err != nil {
 				return err
@@ -421,7 +423,95 @@ var _ = Describe("[sig-compute]VirtualMachinePool", decorators.SigCompute, func(
 		}, 5*time.Second, 1*time.Second).Should(Succeed())
 	})
 
-	It("should roll out VMI template changes and proactively roll out new VMIs", func() {
+	It("[pool] should roll out VM template changes and proactively roll out new VMIs when proactive update strategy is set with ordered policies", func() {
+		newPool := newVirtualMachinePool()
+		newPool.Spec.UpdateStrategy = &poolv1.VirtualMachinePoolUpdateStrategy{
+			Proactive: &poolv1.VirtualMachinePoolProactiveUpdateStrategy{
+				SelectionPolicy: &poolv1.VirtualMachinePoolSelectionPolicy{
+					OrderedPolicies: &poolv1.VirtualMachinePoolOrderedPolicy{
+						LabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"app": "test",
+							},
+						},
+					},
+				},
+			},
+		}
+		doScale(newPool.Name, 3)
+		waitForVMIs(newPool.Namespace, newPool.Spec.Selector, 3)
+
+		vms, err := virtClient.VirtualMachine(newPool.ObjectMeta.Namespace).List(context.Background(), metav1.ListOptions{
+			LabelSelector: labelSelectorToString(newPool.Spec.Selector),
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(vms.Items).To(HaveLen(3))
+
+		for i, vm := range vms.Items {
+			if i == 2 {
+				break
+			}
+			labels := vm.Spec.Template.ObjectMeta.Labels
+			if labels == nil {
+				labels = make(map[string]string)
+			}
+			labels["app"] = "test"
+			vm.Spec.Template.ObjectMeta.Labels = labels
+			_, err := virtClient.VirtualMachine(newPool.ObjectMeta.Namespace).Update(context.Background(), &vm, metav1.UpdateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+		}
+
+		By("Rolling Out VM template change")
+		newPool, err = virtClient.VirtualMachinePool(newPool.ObjectMeta.Namespace).Get(context.Background(), newPool.ObjectMeta.Name, metav1.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		patchData, err := patch.New(patch.WithAdd(
+			fmt.Sprintf("/spec/virtualMachineTemplate/metadata/labels/%s", newLabelKey), newLabelValue),
+		).GeneratePayload()
+		Expect(err).ToNot(HaveOccurred())
+		newPool, err = virtClient.VirtualMachinePool(newPool.ObjectMeta.Namespace).Patch(context.Background(), newPool.Name, types.JSONPatchType, patchData, metav1.PatchOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		By("Ensuring VM picks up label")
+		Eventually(func() bool {
+			for i, vm := range vms.Items {
+				vm, err := virtClient.VirtualMachine(newPool.Namespace).Get(context.Background(), vm.Name, metav1.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+
+				if i < 2 {
+					Expect(vm.Labels[newLabelKey]).To(Equal(newLabelValue))
+				} else {
+					Expect(vm.Labels[newLabelKey]).To(BeEmpty())
+				}
+				return true
+			}
+			return false
+		}, 120*time.Second, 1*time.Second).Should(BeTrue())
+
+		By("Ensuring VMI is re-created to pick up new label")
+		vmis, err := virtClient.VirtualMachineInstance(newPool.Namespace).List(context.Background(), metav1.ListOptions{
+			LabelSelector: labelSelectorToString(newPool.Spec.Selector),
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(vmis.Items).To(HaveLen(3))
+
+		Eventually(func() bool {
+			for i, vmi := range vmis.Items {
+				vmi, err := virtClient.VirtualMachineInstance(newPool.Namespace).Get(context.Background(), vmi.Name, metav1.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+
+				if i < 2 {
+					Expect(vmi.Labels[newLabelKey]).To(Equal(newLabelValue))
+				} else {
+					Expect(vmi.Labels[newLabelKey]).To(BeEmpty())
+				}
+				return true
+			}
+			return false
+		}, 120*time.Second, 1*time.Second).Should(BeTrue())
+	})
+
+	It("[pool]should roll out VMI template changes and proactively roll out new VMIs when update strategy is nil (default)", func() {
 		newPool := newVirtualMachinePool()
 		doScale(newPool.Name, 1)
 		waitForVMIs(newPool.Namespace, newPool.Spec.Selector, 1)
@@ -585,59 +675,6 @@ var _ = Describe("[sig-compute]VirtualMachinePool", decorators.SigCompute, func(
 			Expect(err).ToNot(HaveOccurred())
 			return pool.Status.Replicas
 		}, 10*time.Second, 1*time.Second).Should(Equal(int32(1)))
-	})
-
-	It("should use Opportunistic update strategy when specified", func() {
-		By("Create a new VirtualMachinePool with AscendingOrder update strategy")
-		pool := newPoolFromVMI(libvmifact.NewCirros())
-		pool.Spec.UpdateStrategy = &poolv1.VirtualMachinePoolUpdateStrategy{
-			Opportunistic: pointer.P(true),
-		}
-		pool.Spec.VirtualMachineTemplate.Spec.RunStrategy = pointer.P(v1.RunStrategyAlways)
-		pool = createVirtualMachinePool(pool)
-
-		By("Scaling pool to 5 replicas")
-		doScale(pool.ObjectMeta.Name, 5)
-
-		By("Waiting until all VMs are created and running")
-		waitForVMIs(pool.Namespace, pool.Spec.Selector, 5)
-
-		By("Making a VMI template change on the pool")
-		patchData, err := patch.New(patch.WithAdd(
-			fmt.Sprintf("/spec/virtualMachineTemplate/spec/template/metadata/labels/%s", newLabelKey), newLabelValue),
-		).GeneratePayload()
-		Expect(err).ToNot(HaveOccurred())
-		_, err = virtClient.VirtualMachinePool(pool.ObjectMeta.Namespace).Patch(context.Background(), pool.Name, types.JSONPatchType, patchData, metav1.PatchOptions{})
-		Expect(err).ToNot(HaveOccurred())
-
-		By("Verify that VMs have been updated with new template")
-		Eventually(func() int {
-			vms, err := virtClient.VirtualMachine(pool.ObjectMeta.Namespace).List(context.Background(), metav1.ListOptions{
-				LabelSelector: labelSelectorToString(pool.Spec.Selector),
-			})
-			Expect(err).ToNot(HaveOccurred())
-
-			updatedVMs := 0
-			for _, vm := range vms.Items {
-				if _, ok := vm.Spec.Template.ObjectMeta.Labels[newLabelKey]; ok {
-					updatedVMs++
-				}
-			}
-			return updatedVMs
-		}, 120*time.Second, 1*time.Second).Should(Equal(5))
-
-		By("Verify that VMIs are NOT restarted with opportunistic strategy")
-
-		vmis, err := virtClient.VirtualMachineInstance(pool.Namespace).List(context.Background(), metav1.ListOptions{
-			LabelSelector: labelSelectorToString(pool.Spec.Selector),
-		})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(vmis.Items).To(HaveLen(5))
-
-		for _, vmi := range vmis.Items {
-			_, ok := vmi.ObjectMeta.Labels[newLabelKey]
-			Expect(ok).To(BeFalse())
-		}
 	})
 
 	It("should use DescendingOrder scale-in strategy when specified", func() {
