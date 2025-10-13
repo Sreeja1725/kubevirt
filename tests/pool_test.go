@@ -587,6 +587,59 @@ var _ = Describe("[sig-compute]VirtualMachinePool", decorators.SigCompute, func(
 		}, 10*time.Second, 1*time.Second).Should(Equal(int32(1)))
 	})
 
+	It("should use Opportunistic update strategy when specified", func() {
+		By("Create a new VirtualMachinePool with AscendingOrder update strategy")
+		pool := newPoolFromVMI(libvmifact.NewCirros())
+		pool.Spec.UpdateStrategy = &poolv1.VirtualMachinePoolUpdateStrategy{
+			Opportunistic: pointer.P(true),
+		}
+		pool.Spec.VirtualMachineTemplate.Spec.RunStrategy = pointer.P(v1.RunStrategyAlways)
+		pool = createVirtualMachinePool(pool)
+
+		By("Scaling pool to 5 replicas")
+		doScale(pool.ObjectMeta.Name, 5)
+
+		By("Waiting until all VMs are created and running")
+		waitForVMIs(pool.Namespace, pool.Spec.Selector, 5)
+
+		By("Making a VMI template change on the pool")
+		patchData, err := patch.New(patch.WithAdd(
+			fmt.Sprintf("/spec/virtualMachineTemplate/spec/template/metadata/labels/%s", newLabelKey), newLabelValue),
+		).GeneratePayload()
+		Expect(err).ToNot(HaveOccurred())
+		_, err = virtClient.VirtualMachinePool(pool.ObjectMeta.Namespace).Patch(context.Background(), pool.Name, types.JSONPatchType, patchData, metav1.PatchOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		By("Verify that VMs have been updated with new template")
+		Eventually(func() int {
+			vms, err := virtClient.VirtualMachine(pool.ObjectMeta.Namespace).List(context.Background(), metav1.ListOptions{
+				LabelSelector: labelSelectorToString(pool.Spec.Selector),
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			updatedVMs := 0
+			for _, vm := range vms.Items {
+				if _, ok := vm.Spec.Template.ObjectMeta.Labels[newLabelKey]; ok {
+					updatedVMs++
+				}
+			}
+			return updatedVMs
+		}, 120*time.Second, 1*time.Second).Should(Equal(5))
+
+		By("Verify that VMIs are NOT restarted with opportunistic strategy")
+
+		vmis, err := virtClient.VirtualMachineInstance(pool.Namespace).List(context.Background(), metav1.ListOptions{
+			LabelSelector: labelSelectorToString(pool.Spec.Selector),
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(vmis.Items).To(HaveLen(5))
+
+		for _, vmi := range vmis.Items {
+			_, ok := vmi.ObjectMeta.Labels[newLabelKey]
+			Expect(ok).To(BeFalse())
+		}
+	})
+
 	It("should use DescendingOrder scale-in strategy when specified", func() {
 		By("Create a new VirtualMachinePool with DescendingOrder scale-in policy")
 		pool := newPoolFromVMI(libvmifact.NewCirros())
