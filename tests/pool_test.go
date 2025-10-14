@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/rand"
 
+	k8sv1 "k8s.io/api/core/v1"
 	v1 "kubevirt.io/api/core/v1"
 	poolv1 "kubevirt.io/api/pool/v1alpha1"
 	"kubevirt.io/client-go/kubecli"
@@ -667,6 +668,142 @@ var _ = Describe("[sig-compute]VirtualMachinePool", decorators.SigCompute, func(
 			g.Expect(vmi.UID).NotTo(Equal(vmiUID))
 			g.Expect(vmi.Labels[newLabelKey]).To(Equal(newLabelValue))
 		}, 60*time.Second, 1*time.Second).Should(Succeed())
+	})
+
+	It("should auto-heal consistently failing VMs when autohealing is enabled", func() {
+		By("Creating a pool with autohealing enabled and VMs that will crash loop")
+		pool := newPoolFromVMI(libvmi.New(libvmi.WithMemoryRequest("2Mi")))
+		pool.Spec.VirtualMachineTemplate.Spec.RunStrategy = pointer.P(v1.RunStrategyAlways)
+		pool.Spec.Autohealing = pointer.P(true)
+
+		// Add the fail-fast annotation to the VMI template so VMIs will crash loop
+		if pool.Spec.VirtualMachineTemplate.Spec.Template.ObjectMeta.Annotations == nil {
+			pool.Spec.VirtualMachineTemplate.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
+		}
+		pool.Spec.VirtualMachineTemplate.Spec.Template.ObjectMeta.Annotations[v1.FuncTestLauncherFailFastAnnotation] = ""
+
+		pool = createVirtualMachinePool(pool)
+
+		By("Scaling pool to 1 replica")
+		scale := int32(1)
+		pool, err := virtClient.VirtualMachinePool(testsuite.NamespaceTestDefault).Patch(context.Background(), pool.Name, types.JSONPatchType, []byte(fmt.Sprintf("[{ \"op\": \"replace\", \"path\": \"/spec/replicas\", \"value\": %v }]", scale)), metav1.PatchOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		By("Waiting for VM to be created")
+		var name string
+		Eventually(func(g Gomega) {
+			vms, err := virtClient.VirtualMachine(pool.ObjectMeta.Namespace).List(context.Background(), metav1.ListOptions{
+				LabelSelector: labelSelectorToString(pool.Spec.Selector),
+			})
+			g.Expect(err).ToNot(HaveOccurred())
+			activeVMs := filterNotDeletedVMsOwnedByPool(pool.Name, vms)
+			g.Expect(activeVMs).To(HaveLen(1))
+			name = activeVMs[0].Name
+		}, 60*time.Second, 1*time.Second).Should(Succeed())
+
+		By("Sleeping for 1 minute to let the VM accumulate consecutive start failures")
+		time.Sleep(1 * time.Minute)
+
+		By("Waiting for VMs to accumulate consecutive start failures (>= 3)")
+		var vmUID types.UID
+		Eventually(func(g Gomega) {
+			vm, err := virtClient.VirtualMachine(pool.ObjectMeta.Namespace).Get(context.Background(), name, metav1.GetOptions{})
+			g.Expect(err).ToNot(HaveOccurred())
+			vmUID = vm.UID
+
+			g.Expect(vm.Status.PrintableStatus).To(Equal(v1.VirtualMachineStatusCrashLoopBackOff))
+			g.Expect(vm.Status.StartFailure).ToNot(BeNil())
+			g.Expect(vm.Status.StartFailure.ConsecutiveFailCount).To(BeNumerically(">=", 3))
+		}, 2*time.Minute, 1*time.Second).Should(Succeed())
+
+		By("Checking that autohealing deleted and replaced the failing VMs")
+		Eventually(func(g Gomega) {
+			vm, err := virtClient.VirtualMachine(pool.ObjectMeta.Namespace).Get(context.Background(), name, metav1.GetOptions{})
+			g.Expect(err).ToNot(HaveOccurred())
+
+			if vm.Status.StartFailure != nil {
+				g.Expect(vm.Status.StartFailure.ConsecutiveFailCount).To(BeNumerically("<", 3))
+			} else {
+				g.Expect(vm.Status.StartFailure).To(BeNil())
+			}
+			g.Expect(vm.UID).ToNot(Equal(vmUID))
+		}, 2*time.Minute, 5*time.Second).Should(Succeed())
+
+		By("Checking the startFailure status of the VM after replacementa as the annotation is still present")
+		Eventually(func(g Gomega) {
+			vm, err := virtClient.VirtualMachine(pool.ObjectMeta.Namespace).Get(context.Background(), name, metav1.GetOptions{})
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(vm.Status.StartFailure).NotTo(BeNil())
+		}, 30*time.Second, 5*time.Second).Should(Succeed())
+
+		By("Removing the annotation that causes the VM to crash loop back off")
+		escapedAnnotationKey := strings.ReplaceAll(v1.FuncTestLauncherFailFastAnnotation, "/", "~1")
+		patchData, err := patch.New(patch.WithRemove(fmt.Sprintf("/spec/virtualMachineTemplate/spec/template/metadata/annotations/%s", escapedAnnotationKey))).GeneratePayload()
+		Expect(err).ToNot(HaveOccurred())
+		pool, err = virtClient.VirtualMachinePool(pool.ObjectMeta.Namespace).Patch(context.Background(), pool.Name, types.JSONPatchType, patchData, metav1.PatchOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		By("Checking the startFailure status of the VM to be nil and the VM to be running")
+		Eventually(func(g Gomega) {
+			vm, err := virtClient.VirtualMachine(pool.ObjectMeta.Namespace).Get(context.Background(), name, metav1.GetOptions{})
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(vm.Status.StartFailure).To(BeNil())
+			g.Expect(vm.Status.PrintableStatus).To(Equal(v1.VirtualMachineStatusRunning))
+		}, 30*time.Second, 5*time.Second).Should(Succeed())
+	})
+
+	It("should auto-heal VMs when VM is in not ready state for too long when pvc is not found", func() {
+		pool := newPoolFromVMI(libvmi.New(libvmi.WithMemoryRequest("2Mi")))
+		pool.Spec.VirtualMachineTemplate.Spec.RunStrategy = pointer.P(v1.RunStrategyAlways)
+		pool.Spec.VirtualMachineTemplate.Spec.Template.Spec.Volumes = []v1.Volume{
+			{
+				Name: "non-existent-pvc",
+				VolumeSource: v1.VolumeSource{
+					PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+						PersistentVolumeClaimVolumeSource: k8sv1.PersistentVolumeClaimVolumeSource{
+							ClaimName: "non-existent-pvc",
+						},
+					},
+				},
+			},
+		}
+
+		pool.Spec.Autohealing = pointer.P(true)
+		pool = createVirtualMachinePool(pool)
+
+		By("Scaling pool to 1 replica")
+		scale := int32(1)
+		pool, err := virtClient.VirtualMachinePool(testsuite.NamespaceTestDefault).Patch(context.Background(), pool.Name, types.JSONPatchType, []byte(fmt.Sprintf("[{ \"op\": \"replace\", \"path\": \"/spec/replicas\", \"value\": %v }]", scale)), metav1.PatchOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		By("Waiting for VM to be created")
+		var name string
+		Eventually(func(g Gomega) {
+			vms, err := virtClient.VirtualMachine(pool.ObjectMeta.Namespace).List(context.Background(), metav1.ListOptions{
+				LabelSelector: labelSelectorToString(pool.Spec.Selector),
+			})
+			g.Expect(err).ToNot(HaveOccurred())
+			activeVMs := filterNotDeletedVMsOwnedByPool(pool.Name, vms)
+			g.Expect(activeVMs).To(HaveLen(1))
+			name = activeVMs[0].Name
+		}, 60*time.Second, 1*time.Second).Should(Succeed())
+
+		By("Sleeping for 4 minutes to reach the autohealing threshold")
+		time.Sleep(4 * time.Minute)
+
+		By("Checking status of the VM to be PvcNotFound")
+		vm, err := virtClient.VirtualMachine(pool.ObjectMeta.Namespace).Get(context.Background(), name, metav1.GetOptions{})
+		Expect(vm.Status.PrintableStatus).To(Equal(v1.VirtualMachineStatusPvcNotFound))
+		vmUID := vm.UID
+
+		time.Sleep(1 * time.Minute)
+
+		By("checking that the VM is deleted and replaced after the threshold(i.e. 5 minutes)")
+		Eventually(func(g Gomega) {
+			vm, err := virtClient.VirtualMachine(pool.ObjectMeta.Namespace).Get(context.Background(), name, metav1.GetOptions{})
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(vm.UID).ToNot(Equal(vmUID))
+		}, 30*time.Second, 5*time.Second).Should(Succeed())
 	})
 
 	It("should remove owner references on the VirtualMachine if it is orphan deleted", func() {
