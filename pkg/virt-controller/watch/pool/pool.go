@@ -686,7 +686,7 @@ func (c *Controller) proactiveScaleIn(pool *poolv1.VirtualMachinePool, vms []*vi
 	}
 
 	basePolicy := resolveBasePolicy(pool.Spec.ScaleInStrategy)
-	sortVMsForDownscale(vms, basePolicy)
+	sortVMsBasedOnBasePolicy(vms, basePolicy)
 
 	deleteList := vms[0:count]
 
@@ -1846,6 +1846,8 @@ func nodeSelectorRequirementsAsSelector(nsm *[]k8score.NodeSelectorRequirement) 
 	}
 
 	return selector, nil
+}
+
 func isAutohealingEnabled(pool *poolv1.VirtualMachinePool) bool {
 	return pool.Spec.Autohealing != nil && *pool.Spec.Autohealing
 }

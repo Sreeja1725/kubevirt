@@ -293,6 +293,7 @@ func (in *VirtualMachinePoolSpec) DeepCopyInto(out *VirtualMachinePoolSpec) {
 		in, out := &in.UpdateStrategy, &out.UpdateStrategy
 		*out = new(VirtualMachinePoolUpdateStrategy)
 		(*in).DeepCopyInto(*out)
+	}
 	if in.Autohealing != nil {
 		in, out := &in.Autohealing, &out.Autohealing
 		*out = new(bool)
