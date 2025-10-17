@@ -991,7 +991,7 @@ var _ = Describe("[sig-compute]VirtualMachinePool", decorators.SigCompute, func(
 		waitForVMIs(pool.Namespace, pool.Spec.Selector, 2)
 	})
 
-	It("should scale in VMs based on the scale-in strategy and preserve state is set to offline", func() {
+	It("[vmpool-heal]should scale in VMs based on the scale-in strategy and preserve state is set to offline", func() {
 		pool := newPersistentStorageVirtualMachinePool()
 		pool.Spec.VirtualMachineTemplate.Spec.Template.ObjectMeta.Labels["app"] = "test"
 		pool.Spec.ScaleInStrategy = &poolv1.VirtualMachinePoolScaleInStrategy{
@@ -1019,6 +1019,7 @@ var _ = Describe("[sig-compute]VirtualMachinePool", decorators.SigCompute, func(
 
 		Eventually(func() error {
 			for _, dv := range dvs.Items {
+				fmt.Println("dv", dv.Name, dv.OwnerReferences)
 				if dv.OwnerReferences == nil || len(dv.OwnerReferences) == 0 {
 					return fmt.Errorf("DataVolume %s has no owner references", dv.Name)
 				}
@@ -1045,15 +1046,34 @@ var _ = Describe("[sig-compute]VirtualMachinePool", decorators.SigCompute, func(
 		})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dvs.Items).To(HaveLen(3))
+		var dvUID string
 		for _, dv := range dvs.Items {
-			if dv.Name == "alpine-dv-2" {
+			if dv.Name == "alpine-dv-0" {
 				Expect(dv.OwnerReferences).To(BeEmpty())
+				dvUID = string(dv.UID)
 				continue
 			}
 			Expect(dv.OwnerReferences).To(HaveLen(1))
 			Expect(dv.OwnerReferences[0].Name).To(ContainSubstring(pool.Name))
 		}
 
+		By("Scale up the pool to 3 replicas and verify that the DataVolume which was orphaned is re-adopted by the pool")
+		doScale(pool.Name, 3)
+		waitForVMIs(pool.Namespace, pool.Spec.Selector, 3)
+
+		dvs, err = virtClient.CdiClient().CdiV1beta1().DataVolumes(pool.Namespace).List(context.Background(), metav1.ListOptions{
+			LabelSelector: labelSelectorToString(pool.Spec.Selector),
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dvs.Items).To(HaveLen(3))
+		for _, dv := range dvs.Items {
+			if dv.Name == "alpine-dv-0" {
+				Expect(dv.UID).To(Equal(types.UID(dvUID)))
+				continue
+			}
+			Expect(dv.OwnerReferences).To(HaveLen(1))
+			Expect(dv.OwnerReferences[0].Name).To(ContainSubstring(pool.Name))
+		}
 	})
 
 	DescribeTable("should respect name generation settings", func(appendIndex *bool) {
