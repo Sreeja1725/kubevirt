@@ -709,12 +709,11 @@ func (c *Controller) proactiveScaleIn(pool *poolv1.VirtualMachinePool, vms []*vi
 		}
 	}
 
-	deleteList := vms[0:count]
+	deleteList := eligibleVMs[0:count]
 	c.expectations.ExpectDeletions(poolKey, controller.VirtualMachineKeys(deleteList))
 	errChan := make(chan error, len(deleteList))
 
 	for _, vm := range deleteList {
-
 		if err := c.clientset.VirtualMachine(vm.Namespace).Delete(context.Background(), vm.Name, metav1.DeleteOptions{}); err != nil {
 			c.expectations.DeletionObserved(poolKey, controller.VirtualMachineKey(vm))
 			c.recorder.Eventf(pool, k8score.EventTypeWarning, common.FailedDeleteVirtualMachineReason, "Error deleting virtual machine %s/%s: %v", vm.Namespace, vm.Name, err)
