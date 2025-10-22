@@ -20364,10 +20364,13 @@ var CRDsValidation map[string]string = map[string]string{
                     Defaults to "Random" base policy when no SelectionPolicy is configured
                   properties:
                     basePolicy:
-                      description: BasePolicy is a catch-all policy [Random|DescendingOrder]
+                      description: BasePolicy is a catch-all policy [AscendingOrder|DescendingOrder|Newest|Oldest|Random]
                       enum:
-                      - Random
+                      - AscendingOrder
                       - DescendingOrder
+                      - Newest
+                      - Oldest
+                      - Random
                       type: string
                     selectors:
                       description: Selectors is a list of selection policies.
@@ -20521,10 +20524,13 @@ var CRDsValidation map[string]string = map[string]string{
                     Defaults to "Random" base policy when no SelectionPolicy is configured
                   properties:
                     basePolicy:
-                      description: BasePolicy is a catch-all policy [Random|DescendingOrder]
+                      description: BasePolicy is a catch-all policy [AscendingOrder|DescendingOrder|Newest|Oldest|Random]
                       enum:
-                      - Random
+                      - AscendingOrder
                       - DescendingOrder
+                      - Newest
+                      - Oldest
+                      - Random
                       type: string
                     selectors:
                       description: Selectors is a list of selection policies.

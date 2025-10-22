@@ -31485,7 +31485,7 @@ func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolSelectionPolicy(ref c
 				Properties: map[string]spec.Schema{
 					"basePolicy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BasePolicy is a catch-all policy [Random|DescendingOrder]",
+							Description: "BasePolicy is a catch-all policy [AscendingOrder|DescendingOrder|Newest|Oldest|Random]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

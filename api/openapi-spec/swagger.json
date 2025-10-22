@@ -19010,7 +19010,7 @@
     "type": "object",
     "properties": {
      "basePolicy": {
-      "description": "BasePolicy is a catch-all policy [Random|DescendingOrder]",
+      "description": "BasePolicy is a catch-all policy [AscendingOrder|DescendingOrder|Newest|Oldest|Random]",
       "type": "string"
      },
      "selectors": {
