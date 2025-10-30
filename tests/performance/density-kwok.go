@@ -39,7 +39,7 @@ import (
 
 const (
 	vmBatchStartupLimit = 5 * time.Minute
-	defaultVMCount      = 1000
+	defaultVMCount      = 4000
 )
 
 var _ = Describe(KWOK("Control Plane Performance Density Testing using kwok", func() {
