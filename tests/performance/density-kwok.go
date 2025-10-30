@@ -60,7 +60,9 @@ var _ = Describe(KWOK("Control Plane Performance Density Testing using kwok", fu
 
 		if !primed {
 			By("Create primer VMI")
-			createFakeVMIBatchWithKWOK(virtClient, 1)
+			vmi := newFakeVMISpecWithResources()
+			_, err := virtClient.VirtualMachineInstance(testsuite.GetTestNamespace(nil)).Create(context.Background(), vmi, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
 
 			By("Waiting for primer VMI to be Running")
 			waitRunningVMI(virtClient, 1, 1*time.Minute)
@@ -117,6 +119,7 @@ var _ = Describe(KWOK("Control Plane Performance Density Testing using kwok", fu
 func createFakeVMIBatchWithKWOK(virtClient kubecli.KubevirtClient, vmCount int) {
 	for i := 1; i <= vmCount; i++ {
 		vmi := newFakeVMISpecWithResources()
+		vmi.Name = fmt.Sprintf("testvmi-%d", i)
 
 		_, err := virtClient.VirtualMachineInstance(testsuite.GetTestNamespace(nil)).Create(context.Background(), vmi, metav1.CreateOptions{})
 		Expect(err).ToNot(HaveOccurred())
@@ -150,6 +153,7 @@ func deleteAndVerifyFakeVMBatch(virtClient kubecli.KubevirtClient, timeout time.
 func createFakeBatchRunningVMWithKWOK(virtClient kubecli.KubevirtClient, vmCount int) {
 	for i := 1; i <= vmCount; i++ {
 		vmi := newFakeVMISpecWithResources()
+		vmi.Name = fmt.Sprintf("testvm-%d", i)
 		vm := libvmi.NewVirtualMachine(vmi, libvmi.WithRunStrategy(v1.RunStrategyAlways))
 
 		_, err := virtClient.VirtualMachine(testsuite.GetTestNamespace(nil)).Create(context.Background(), vm, metav1.CreateOptions{})
