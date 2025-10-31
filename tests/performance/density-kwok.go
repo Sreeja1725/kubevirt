@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	vmBatchStartupLimit = 5 * time.Minute
+	vmBatchStartupLimit = 10 * time.Minute
 	defaultVMCount      = 8000
 )
 
