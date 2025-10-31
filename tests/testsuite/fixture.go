@@ -57,7 +57,7 @@ const (
 	defaultEventuallyTimeout         = 5 * time.Second
 	defaultEventuallyPollingInterval = 1 * time.Second
 	defaultKubevirtReadyTimeout      = 5 * time.Minute
-	defaultKWOKNodeCount             = 4000
+	defaultKWOKNodeCount             = 8000
 	defaultMachineType               = "q35"
 )
 
