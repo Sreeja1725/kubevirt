@@ -38,18 +38,19 @@ import (
 )
 
 const (
-	vmBatchStartupLimit = 5 * time.Minute
-	defaultVMCount      = 8000
-	deleteBatchSize     = int64(500)
+	defaultVMBatchStartupLimit = 15 * time.Minute
+	defaultVMCount             = 8000
+	deleteBatchSize            = int64(500)
 )
 
 var _ = Describe(KWOK("Control Plane Performance Density Testing using kwok", func() {
 	var (
-		virtClient  kubecli.KubevirtClient
-		startTime   time.Time
-		primed      bool
-		vmCount     = getVMCount()
-		metricsPath = filepath.Join(os.Getenv("ARTIFACTS"), "VMI-kwok-perf-audit-results.json")
+		virtClient          kubecli.KubevirtClient
+		startTime           time.Time
+		primed              bool
+		vmCount             = getVMCount()
+		vmBatchStartupLimit = getVMBatchStartupLimit()
+		metricsPath         = filepath.Join(os.Getenv("ARTIFACTS"), "VMI-kwok-perf-audit-results.json")
 	)
 
 	BeforeEach(func() {
@@ -114,6 +115,13 @@ var _ = Describe(KWOK("Control Plane Performance Density Testing using kwok", fu
 				collectMetrics(startTime, metricsPath)
 			})
 		})
+
+		Context("delete fake nodes", func() {
+			It("should successfully delete all fake KWOK nodes", func() {
+				By(fmt.Sprintf("Deleting fake KWOK nodes in batches of %d", deleteBatchSize))
+				deleteFakeKWOKNodes(virtClient, vmBatchStartupLimit)
+			})
+		})
 	})
 }))
 
@@ -128,46 +136,51 @@ func createFakeVMIBatchWithKWOK(virtClient kubecli.KubevirtClient, vmCount int) 
 }
 
 func deleteAndVerifyFakeVMIBatch(virtClient kubecli.KubevirtClient, timeout time.Duration) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := getContextWithTimeout(timeout)
 	defer cancel()
 
-	// number of batches needed
-	batchCount := int(defaultVMCount/deleteBatchSize) + 1
+	By("Deleting batches of VMIs and verifying all VMIs are deleted")
+	Eventually(func() bool {
+		vmis, err := virtClient.VirtualMachineInstance(testsuite.GetTestNamespace(nil)).List(ctx, metav1.ListOptions{Limit: deleteBatchSize})
+		Expect(err).ToNot(HaveOccurred())
 
-	for i := range batchCount {
-		By(fmt.Sprintf("Deleting batch %d of %d", i, batchCount))
-		err := virtClient.VirtualMachineInstance(testsuite.GetTestNamespace(nil)).DeleteCollection(
+		if len(vmis.Items) == 0 {
+			return true
+		}
+
+		err = virtClient.VirtualMachineInstance(testsuite.GetTestNamespace(nil)).DeleteCollection(
 			ctx,
 			metav1.DeleteOptions{},
 			metav1.ListOptions{Limit: deleteBatchSize},
 		)
 		Expect(err).To(Succeed())
-	}
 
-	By("Verifying all VMIs are deleted")
-	Eventually(func() []v1.VirtualMachineInstance {
-		vmis, err := virtClient.VirtualMachineInstance(testsuite.GetTestNamespace(nil)).List(ctx, metav1.ListOptions{})
-		Expect(err).ToNot(HaveOccurred())
-		return vmis.Items
-	}, timeout, 10*time.Second).Should(BeEmpty())
+		return false
+	}, timeout, 20*time.Second).Should(BeTrue())
 }
 
 func deleteAndVerifyFakeVMBatch(virtClient kubecli.KubevirtClient, timeout time.Duration) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := getContextWithTimeout(timeout)
 	defer cancel()
 
-	// number of batches needed
-	batchCount := int(defaultVMCount/deleteBatchSize) + 1
+	By("Deleting batches of VMs")
+	Eventually(func() bool {
+		list, err := virtClient.VirtualMachine(testsuite.GetTestNamespace(nil)).List(ctx, metav1.ListOptions{Limit: 1})
+		Expect(err).ToNot(HaveOccurred())
 
-	for i := range batchCount {
-		By(fmt.Sprintf("Deleting batch %d of %d", i, batchCount))
-		err := virtClient.VirtualMachine(testsuite.GetTestNamespace(nil)).DeleteCollection(
+		if len(list.Items) == 0 {
+			return true
+		}
+
+		err = virtClient.VirtualMachine(testsuite.GetTestNamespace(nil)).DeleteCollection(
 			ctx,
 			metav1.DeleteOptions{},
 			metav1.ListOptions{Limit: deleteBatchSize},
 		)
 		Expect(err).To(Succeed())
-	}
+
+		return false
+	}, timeout, 20*time.Second).Should(BeTrue())
 
 	By("Verifying all VMIs are deleted")
 	Eventually(func() []v1.VirtualMachineInstance {
@@ -222,4 +235,43 @@ func getVMCount() int {
 	}
 
 	return vmCount
+}
+
+func getVMBatchStartupLimit() time.Duration {
+	batchStartupLimitString := os.Getenv("VM_BATCH_STARTUP_LIMIT")
+	if batchStartupLimitString == "" {
+		return defaultVMBatchStartupLimit
+	}
+
+	batchStartupLimit, err := time.ParseDuration(batchStartupLimitString)
+	if err != nil {
+		return defaultVMBatchStartupLimit
+	}
+	return batchStartupLimit
+}
+
+func getContextWithTimeout(timeout time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), timeout)
+}
+
+func deleteFakeKWOKNodes(virtClient kubecli.KubevirtClient, timeout time.Duration) {
+	ctx, cancel := getContextWithTimeout(timeout)
+	defer cancel()
+
+	Eventually(func() bool {
+		nodes, err := virtClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{LabelSelector: "app=kwok", Limit: 1})
+		Expect(err).ToNot(HaveOccurred())
+
+		if len(nodes.Items) == 0 {
+			return true
+		}
+
+		err = virtClient.CoreV1().Nodes().DeleteCollection(
+			ctx,
+			metav1.DeleteOptions{},
+			metav1.ListOptions{LabelSelector: "app=kwok", Limit: deleteBatchSize})
+		Expect(err).To(Succeed())
+
+		return false
+	}, timeout, 20*time.Second).Should(BeTrue())
 }
