@@ -83,6 +83,7 @@ import (
 	launcherclients "kubevirt.io/kubevirt/pkg/virt-handler/launcher-clients"
 	migrationproxy "kubevirt.io/kubevirt/pkg/virt-handler/migration-proxy"
 	nodelabeller "kubevirt.io/kubevirt/pkg/virt-handler/node-labeller"
+	nodelocalhotplug "kubevirt.io/kubevirt/pkg/virt-handler/node-local-hotplug"
 	"kubevirt.io/kubevirt/pkg/virt-handler/rest"
 	"kubevirt.io/kubevirt/pkg/virt-handler/seccomp"
 	"kubevirt.io/kubevirt/pkg/virt-handler/selinux"
@@ -507,6 +508,13 @@ func (app *virtHandlerApp) Run() {
 	go migrationTargetController.Run(5, stop)
 	go vmController.Run(10, stop)
 	go ksmHandler.Run(stop)
+
+	nlhCtx, nlhCancel := context.WithCancel(context.Background())
+	go func() { <-stop; nlhCancel() }()
+	nlhServer := nodelocalhotplug.NewServer(app.virtCli, app.clusterConfig)
+	if err := nodelocalhotplug.StartUnix(nlhCtx, nodelocalhotplug.SocketPath, nlhServer); err != nil {
+		logger.Reason(err).Error("failed to start node-local hotplug gRPC server")
+	}
 
 	doneCh := make(chan string)
 	defer close(doneCh)

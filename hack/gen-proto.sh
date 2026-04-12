@@ -16,3 +16,4 @@ protoc --go_out=plugins=grpc:. pkg/handler-launcher-com/cmd/info/info.proto
 protoc --go_out=plugins=grpc:. pkg/vsock/system/v1/system.proto
 protoc --go_out=plugins=grpc:. pkg/synchronizer-com/synchronization/v1/synchronization.proto
 protoc --go_out=plugins=grpc:. pkg/storage/cbt/nbd/v1/nbd.proto
+protoc --go_out=plugins=grpc:. pkg/virt-handler/node-local-hotplug/nodelocalhotplug.proto
