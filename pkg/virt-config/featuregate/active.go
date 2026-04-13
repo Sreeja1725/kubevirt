@@ -229,6 +229,15 @@ const (
 	// Owner: SIG network
 	// Beta: v1.8
 	LiveUpdateNADRef = "LiveUpdateNADRef"
+
+	// Owner: sig-storage
+	// Alpha: v1.8.0
+	//
+	// NodeLocalHotplug enables hotplugging volumes directly on the node via
+	// virt-handler's gRPC server, bypassing the attachment pod flow managed by
+	// virt-controller. When enabled, volumes marked as node-local in the VMI
+	// status will not trigger attachment pod creation.
+	NodeLocalHotplugGate = "NodeLocalHotplug"
 )
 
 func init() {
@@ -275,4 +284,5 @@ func init() {
 	RegisterFeatureGate(FeatureGate{Name: ReservedOverheadMemlock, State: Alpha})
 	RegisterFeatureGate(FeatureGate{Name: OptOutRoleAggregation, State: Alpha})
 	RegisterFeatureGate(FeatureGate{Name: LiveUpdateNADRef, State: Beta})
+	RegisterFeatureGate(FeatureGate{Name: NodeLocalHotplugGate, State: Alpha})
 }

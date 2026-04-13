@@ -226,6 +226,9 @@ func (c *Controller) sync(vmi *virtv1.VirtualMachineInstance, pod *k8sv1.Pod, da
 			}
 		}
 		pod = patchedPod
+		if c.clusterConfig.NodeLocalHotplugEnabled() {
+			return nil, pod
+		}
 
 		hotplugVolumes := storagetypes.GetHotplugVolumes(vmi, pod)
 		hotplugAttachmentPods, err := controller.AttachmentPods(pod, c.podIndexer)

@@ -173,6 +173,15 @@ func (c *Controller) processHotplugVolumeStatus(
 		statusCopy.HotplugVolume = &virtv1.HotplugVolumeStatus{}
 	}
 
+	// Node-local hotplug volumes have their phases managed by virt-handler
+	// directly. Do not overwrite phases set by virt-handler or attempt
+	// attachment pod logic.
+	if statusCopy.HotplugVolume.NodeLocal && c.clusterConfig.NodeLocalHotplugEnabled() {
+		log.Log.V(3).Infof("Preserving virt-handler-managed phase %s for node-local volume %s", statusCopy.Phase, volumeName)
+		*status = *statusCopy
+		return
+	}
+
 	if attachmentPod == nil {
 		if !c.volumeReady(statusCopy.Phase) {
 			statusCopy.HotplugVolume.AttachPodUID = ""
@@ -319,6 +328,20 @@ func (c *Controller) updateVolumeStatus(vmi *virtv1.VirtualMachineInstance, virt
 	// We have updated the status of current volumes, but if a volume was removed, we want to keep that status, until there is no
 	// associated pod, then remove it. Any statuses left in the map are statuses without a matching volume in the spec.
 	for volumeName, status := range oldStatusMap {
+		// Node-local volumes have no attachment pod. Retain the status
+		// until virt-handler advances the phase to UnMountedFromPod,
+		// then allow it to be dropped on the next reconcile.
+		if status.HotplugVolume != nil && status.HotplugVolume.NodeLocal && c.clusterConfig.NodeLocalHotplugEnabled() {
+			if status.Phase != virtv1.HotplugVolumeUnMounted {
+				status.Phase = phaseForUnpluggedVolume(status.Phase)
+				log.Log.V(3).Infof("Setting phase %s for node-local volume %s (no attachment pod)", status.Phase, volumeName)
+				newStatus = append(newStatus, status)
+			} else {
+				log.Log.Object(vmi).V(3).Infof("Deleted status for node-local volume %s (UnMountedFromPod)", volumeName)
+			}
+			continue
+		}
+
 		attachmentPod := findAttachmentPodByVolumeName(volumeName, attachmentPods)
 		if attachmentPod != nil {
 			status.HotplugVolume.AttachPodName = attachmentPod.Name

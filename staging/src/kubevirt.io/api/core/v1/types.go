@@ -491,6 +491,13 @@ type HotplugVolumeStatus struct {
 	AttachPodName string `json:"attachPodName,omitempty"`
 	// AttachPodUID is the UID of the pod used to attach the volume to the node.
 	AttachPodUID types.UID `json:"attachPodUID,omitempty"`
+	// NodeLocal indicates the volume was attached directly by virt-handler on
+	// the node (via the node-local hotplug server) and does not need an
+	// attachment pod managed by virt-controller.
+	NodeLocal bool `json:"nodeLocal,omitempty"`
+}
+
+type NodeLocalHotplugVolumeStatus struct {
 }
 
 // ContainerDiskInfo shows info about the containerdisk

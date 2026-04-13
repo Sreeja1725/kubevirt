@@ -38,6 +38,9 @@ github.com/cilium/ebpf/internal/sys
 github.com/cilium/ebpf/internal/tracefs
 github.com/cilium/ebpf/internal/unix
 github.com/cilium/ebpf/link
+# github.com/container-storage-interface/spec v1.12.0
+## explicit; go 1.23.0
+github.com/container-storage-interface/spec/lib/go/csi
 # github.com/containernetworking/cni v1.2.3
 ## explicit; go 1.21
 github.com/containernetworking/cni/pkg/ns
@@ -802,6 +805,7 @@ google.golang.org/protobuf/types/gofeaturespb
 google.golang.org/protobuf/types/known/anypb
 google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/timestamppb
+google.golang.org/protobuf/types/known/wrapperspb
 # gopkg.in/evanphx/json-patch.v4 v4.12.0
 ## explicit
 # gopkg.in/evanphx/json-patch.v4 v4.13.0
