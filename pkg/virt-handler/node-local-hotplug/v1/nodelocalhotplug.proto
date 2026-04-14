@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package kubevirt.virthandler.nodelocalhotplug.v1;
+option go_package = "v1";
+
+// NodeLocalHotplug is a node-local gRPC API for disk hotplug on a node.
+//
+// The caller sends a volume reference (PVC name, DataVolume name, or disk img). The server (running inside virt-handler) resolves the on-node
+// host path itself by looking up PVC → PV and dispatching by PV type:
+//
+//   Local / HostPath → use pv.Spec path directly
+//   CSI              → kubelet staging path convention
+//   NFS              → managed mount under /var/run/kubevirt/
+//   iSCSI / FC / RBD → derive /dev/disk/by-* device path
+//   NGN volumes      → existing CSI flow (no resolution needed)
+//
+// Virt-handler then performs all privileged operations:
+//   block device → mknod + cgroup allow + chown
+//   file         → bind-mount as <vol>.img + chown
+//   directory    → bind-mount as <vol>/ + chown
+// Then patches the VMI spec and syncs the launcher domain.
+// The caller needs only gRPC socket access — no root, mount, or path knowledge.
+
+service NodeLocalHotplug {
+  rpc AttachVolume(AttachVolumeRequest) returns (AttachVolumeResponse) {}
+  rpc RemoveVolume(RemoveVolumeRequest) returns (RemoveVolumeResponse) {}
+}
+
+message Empty {}
+
+// PVC or DataVolume reference (exactly one must be set).
+message HotplugVolumeSourceSpec {
+  string pvc_claim_name = 1;
+  string data_volume_name = 2;
+}
+
+// disk target
+message HotplugDiskTargetSpec {
+  // JSON of kubevirt.io/api/core/v1.Disk (disk/lun/cdrom, cache, serial, blockSize, ...).
+  // When non-empty, overrides the simple `disk` field above.
+  bytes disk_json = 1;
+  bool read_only = 2;
+}
+
+// Typed attach: volume source + disk_json
+message HotplugAttachSpec {
+  string name = 1;
+  HotplugVolumeSourceSpec volume_source = 2;
+  HotplugDiskTargetSpec disk = 3;
+  uint32 boot_order = 4;
+}
+
+message AttachVolumeRequest {
+  string namespace = 1;
+  string vmi_name = 2;
+  // JSON with name, disk, volumeSource, dryRun (same shape as virt-api addvolume; alternative to attach_spec).
+  bytes attach_options_json = 3;
+  HotplugAttachSpec attach_spec = 4;
+}
+
+message AttachVolumeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveVolumeRequest {
+  string namespace = 1;
+  string vmi_name = 2;
+  string volume_name = 3;
+  repeated string dry_run = 4;
+}
+
+message RemoveVolumeResponse {
+  bool success = 1;
+  string message = 2;
+}
