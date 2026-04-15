@@ -36,7 +36,6 @@ import (
 	diskutils "kubevirt.io/kubevirt/pkg/ephemeral-disk-utils"
 	hotplugdisk "kubevirt.io/kubevirt/pkg/hotplug-disk"
 	"kubevirt.io/kubevirt/pkg/safepath"
-	"kubevirt.io/kubevirt/pkg/unsafepath"
 	"kubevirt.io/kubevirt/pkg/util"
 	"kubevirt.io/kubevirt/pkg/virt-handler/cgroup"
 	virt_chroot "kubevirt.io/kubevirt/pkg/virt-handler/virt-chroot"
@@ -109,7 +108,7 @@ func setBlockDeviceCgroup(vmi *v1.VirtualMachineInstance, host string, rdev uint
 		Permissions: "rwm",
 		Allow:       allow,
 	}
-	cgroupManager, err := cgroup.NewManagerFromVM(vmi, host, "")
+	cgroupManager, err := cgroup.NewManagerFromVM(vmi, host, "", true)
 	if err != nil {
 		return err
 	}
@@ -174,7 +173,10 @@ func publishBlock(vmi *v1.VirtualMachineInstance, host string, targetBase *safep
 			if err := allowBlockDevice(vmi, host, rdev); err != nil {
 				return err
 			}
-			p, _ := safepath.NewPathNoFollow(filepath.Join(unsafepath.UnsafeAbsolute(targetBase.Raw()), volumeName))
+			p, perr := safepath.JoinNoFollow(targetBase, volumeName)
+			if perr != nil {
+				return fmt.Errorf("join path for ownership: %w", perr)
+			}
 			return diskutils.DefaultOwnershipManager.SetFileOwnership(p)
 		}
 		if err := safepath.UnlinkAtNoFollow(leaf); err != nil {
@@ -282,12 +284,13 @@ func cleanupFromLauncher(vmi *v1.VirtualMachineInstance, host, kubeletPodsDir, v
 
 		// File or directory — unmount first, then remove.
 		if out, uerr := virt_chroot.UmountChroot(leaf).CombinedOutput(); uerr != nil {
-			return false, fmt.Errorf("unmount %s: %s: %w", unsafepath.UnsafeAbsolute(leaf.Raw()), string(out), uerr)
+			return false, fmt.Errorf("unmount %s: %s: %w", leaf, string(out), uerr)
 		}
 		if err := safepath.UnlinkAtNoFollow(leaf); err != nil {
-			return false, fmt.Errorf("remove %s: %w", unsafepath.UnsafeAbsolute(leaf.Raw()), err)
+			return false, fmt.Errorf("remove %s: %w", leaf, err)
 		}
 		return true, nil
 	}
 	return false, nil
 }
+
