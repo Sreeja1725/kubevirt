@@ -635,9 +635,11 @@ func (c *VirtualMachineController) updateVolumeStatusesFromDomain(vmi *v1.Virtua
 		specVolumeMap[utilityVolume.Name] = struct{}{}
 	}
 	newStatusMap := make(map[string]v1.VolumeStatus)
+	existingStatusMap := make(map[string]struct{})
 	var newStatuses []v1.VolumeStatus
 	needsRefresh := false
 	for _, volumeStatus := range vmi.Status.VolumeStatus {
+		existingStatusMap[volumeStatus.Name] = struct{}{}
 		tmpNeedsRefresh := false
 		// relying on the fact that target will be "" if not in the map
 		// see updateHotplugVolumeStatus
@@ -654,6 +656,28 @@ func (c *VirtualMachineController) updateVolumeStatusesFromDomain(vmi *v1.Virtua
 		newStatuses = append(newStatuses, volumeStatus)
 		newStatusMap[volumeStatus.Name] = volumeStatus
 	}
+
+	if c.clusterConfig.NodeLocalHotplugEnabled() {
+		missing := false
+		for name := range specVolumeMap {
+			if _, ok := existingStatusMap[name]; !ok {
+				missing = true
+				break
+			}
+		}
+		if missing {
+			if fresh, err := c.clientset.VirtualMachineInstance(vmi.Namespace).Get(context.Background(), vmi.Name, metav1.GetOptions{}); err == nil {
+				for _, vs := range fresh.Status.VolumeStatus {
+					if _, ok := existingStatusMap[vs.Name]; !ok && vs.HotplugVolume != nil && vs.HotplugVolume.NodeLocal {
+						newStatuses = append(newStatuses, vs)
+						newStatusMap[vs.Name] = vs
+						hasHotplug = true
+					}
+				}
+			}
+		}
+	}
+
 	sort.SliceStable(newStatuses, func(i, j int) bool {
 		return strings.Compare(newStatuses[i].Name, newStatuses[j].Name) == -1
 	})

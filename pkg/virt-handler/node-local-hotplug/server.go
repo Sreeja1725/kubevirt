@@ -30,11 +30,11 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	v1 "kubevirt.io/api/core/v1"
 	"kubevirt.io/client-go/kubecli"
 	"kubevirt.io/client-go/log"
 
+	storagetypes "kubevirt.io/kubevirt/pkg/storage/types"
 	virtconfig "kubevirt.io/kubevirt/pkg/virt-config"
 
 	pb "kubevirt.io/kubevirt/pkg/virt-handler/node-local-hotplug/v1"
@@ -58,9 +58,9 @@ func NewServer(host string, virtCli kubecli.KubevirtClient, clusterConfig *virtc
 	}
 }
 
-// patchVolumePhase patches a single volume's phase, message, and reason on the
-// VMI status subresource. It also ensures HotplugVolume.NodeLocal is set to
-// true so that virt-controller skips attachment pod creation for this volume.
+// patchVolumePhase does a read-modify-write on the VMI to set a single
+// volume's phase, message, reason, and marks HotplugVolume.NodeLocal=true
+// so virt-controller skips attachment pod creation.
 func (s *Server) patchVolumePhase(ctx context.Context, ns, vmiName, volumeName string, phase v1.VolumePhase, reason, message string) error {
 	vmi, err := s.virtCli.VirtualMachineInstance(ns).Get(ctx, vmiName, metav1.GetOptions{})
 	if err != nil {
@@ -83,7 +83,7 @@ func (s *Server) patchVolumePhase(ctx context.Context, ns, vmiName, volumeName s
 		}
 	}
 	if !found {
-		vmi.Status.VolumeStatus = append(vmi.Status.VolumeStatus, v1.VolumeStatus{
+		newEntry := v1.VolumeStatus{
 			Name: volumeName,
 			HotplugVolume: &v1.HotplugVolumeStatus{
 				NodeLocal: true,
@@ -91,25 +91,47 @@ func (s *Server) patchVolumePhase(ctx context.Context, ns, vmiName, volumeName s
 			Phase:   phase,
 			Reason:  reason,
 			Message: message,
-		})
+		}
+		if pvcInfo := s.buildPVCInfo(ctx, vmi, volumeName); pvcInfo != nil {
+			newEntry.PersistentVolumeClaimInfo = pvcInfo
+		}
+		vmi.Status.VolumeStatus = append(vmi.Status.VolumeStatus, newEntry)
 	}
 
-	statusJSON, err := json.Marshal(map[string]interface{}{
-		"status": map[string]interface{}{
-			"volumeStatus": vmi.Status.VolumeStatus,
-		},
-	})
+	_, err = s.virtCli.VirtualMachineInstance(ns).Update(ctx, vmi, metav1.UpdateOptions{})
 	if err != nil {
-		return fmt.Errorf("marshal status patch: %w", err)
+		return fmt.Errorf("update VMI for volume %q phase %s: %w", volumeName, phase, err)
 	}
-
-	_, err = s.virtCli.VirtualMachineInstance(ns).Patch(ctx, vmiName, types.MergePatchType, statusJSON, metav1.PatchOptions{}, "status")
-	if err != nil {
-		return fmt.Errorf("patch VMI status for volume %q phase %s: %w", volumeName, phase, err)
-	}
-
-	log.DefaultLogger().V(3).Infof("Patched volume %q phase to %s on VMI %s/%s", volumeName, phase, ns, vmiName)
+	log.DefaultLogger().V(3).Infof("Updated volume %q phase to %s on VMI %s/%s", volumeName, phase, ns, vmiName)
 	return nil
+}
+
+// buildPVCInfo looks up the PVC for a volume and returns PersistentVolumeClaimInfo
+// with capacity, access modes, volume mode, and filesystem overhead.
+func (s *Server) buildPVCInfo(ctx context.Context, vmi *v1.VirtualMachineInstance, volumeName string) *v1.PersistentVolumeClaimInfo {
+	pvcName := ""
+	for _, vol := range vmi.Spec.Volumes {
+		if vol.Name == volumeName {
+			pvcName = storagetypes.PVCNameFromVirtVolume(&vol)
+			break
+		}
+	}
+	if pvcName == "" {
+		return nil
+	}
+	pvc, err := s.virtCli.CoreV1().PersistentVolumeClaims(vmi.Namespace).Get(ctx, pvcName, metav1.GetOptions{})
+	if err != nil {
+		log.DefaultLogger().V(3).Infof("Could not get PVC %s/%s for volume status: %v", vmi.Namespace, pvcName, err)
+		return nil
+	}
+	return &v1.PersistentVolumeClaimInfo{
+		ClaimName:    pvc.Name,
+		AccessModes:  pvc.Spec.AccessModes,
+		VolumeMode:   pvc.Spec.VolumeMode,
+		Capacity:     pvc.Status.Capacity,
+		Requests:     pvc.Spec.Resources.Requests,
+		Preallocated: storagetypes.IsPreallocated(pvc.ObjectMeta.Annotations),
+	}
 }
 
 func (s *Server) AttachVolume(ctx context.Context, req *pb.AttachVolumeRequest) (*pb.AttachVolumeResponse, error) {
@@ -170,11 +192,13 @@ func (s *Server) AttachVolume(ctx context.Context, req *pb.AttachVolumeRequest) 
 		return &pb.AttachVolumeResponse{Success: false, Message: fmt.Sprintf("failed to attach volume %q on %s/%s: %v", opts.Name, ns, vmiName, err)}, nil
 	}
 
-	// Attach succeeded — mark AttachedToNode. virt-handler's existing
-	// updateHotplugVolumeStatus loop will advance to MountedToPod → Ready.
+	// Attach succeeded — the volume is published into the virt-launcher
+	// hotplug directory, so mark MountedToPod directly. virt-handler's
+	// reconcile loop will advance to Ready once virt-launcher's SyncVMI
+	// attaches the disk to the libvirt domain and the target appears.
 	if patchErr := s.patchVolumePhase(ctx, ns, vmiName, opts.Name,
-		v1.HotplugVolumeAttachedToNode, "NodeLocalHotplug", fmt.Sprintf("Volume %s attached to node via node-local hotplug", opts.Name)); patchErr != nil {
-		log.DefaultLogger().Reason(patchErr).Errorf("Failed to patch AttachedToNode phase for volume %s on %s/%s", opts.Name, ns, vmiName)
+		v1.HotplugVolumeMounted, "NodeLocalHotplug", fmt.Sprintf("Volume %s mounted in virt-launcher pod via node-local hotplug", opts.Name)); patchErr != nil {
+		log.DefaultLogger().Reason(patchErr).Errorf("Failed to patch MountedToPod phase for volume %s on %s/%s", opts.Name, ns, vmiName)
 	}
 
 	return &pb.AttachVolumeResponse{
@@ -426,3 +450,4 @@ func volumeSourceName(volumeSource *v1.HotplugVolumeSource) string {
 	}
 	return ""
 }
+

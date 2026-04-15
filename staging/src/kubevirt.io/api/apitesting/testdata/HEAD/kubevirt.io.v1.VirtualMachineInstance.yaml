@@ -797,6 +797,7 @@ status:
     hotplugVolume:
       attachPodName: attachPodNameValue
       attachPodUID: attachPodUIDValue
+      nodeLocal: true
     memoryDumpVolume:
       claimName: claimNameValue
       endTimestamp: "1988-01-01T01:01:01Z"

@@ -173,13 +173,24 @@ func (c *Controller) processHotplugVolumeStatus(
 		statusCopy.HotplugVolume = &virtv1.HotplugVolumeStatus{}
 	}
 
-	usePVCStatus := false
+	// Node-local hotplug volumes have their phases managed by virt-handler
+	// directly. When the feature gate is on and we see NodeLocal=true,
+	// preserve whatever virt-handler set and don't overwrite.
+	if statusCopy.HotplugVolume.NodeLocal && c.clusterConfig.NodeLocalHotplugEnabled() {
+		log.Log.V(3).Infof("Preserving virt-handler-managed phase %s for node-local volume %s", statusCopy.Phase, volumeName)
+		*status = *statusCopy
+		return
+	}
 
 	if attachmentPod == nil {
 		if !c.volumeReady(statusCopy.Phase) {
 			statusCopy.HotplugVolume.AttachPodUID = ""
 			// Volume is not hotplugged in VM and Pod is gone, or hasn't been created yet, check for the PVC associated with the volume to set phase and message
-			usePVCStatus = true
+			phase, reason, message := c.getVolumePhaseMessageReason(pvcName, vmi.Namespace)
+			statusCopy.Phase = phase
+			log.Log.V(3).Infof("Setting phase %s for volume %s", phase, volumeName)
+			statusCopy.Message = message
+			statusCopy.Reason = reason
 		}
 	} else {
 		statusCopy.HotplugVolume.AttachPodName = attachmentPod.Name
@@ -196,22 +207,6 @@ func (c *Controller) processHotplugVolumeStatus(
 			statusCopy.Reason = controller.SuccessfulCreatePodReason
 			c.recorder.Eventf(vmi, k8sv1.EventTypeNormal, statusCopy.Reason, statusCopy.Message)
 		}
-		// Handle race condition where an unplugged volume was quickly re-attached.
-		// The old attachment pod may still be cleaning up while the new one is created,
-		// causing the new volume to inherit HotplugVolumeDetaching status from the previous
-		// hotplug instead of being reset. We reset the phase based on PVC status so it can
-		// properly transition through the normal attach flow on the next reconcile.
-		if statusCopy.Phase == virtv1.HotplugVolumeDetaching {
-			usePVCStatus = true
-		}
-	}
-
-	if usePVCStatus {
-		phase, reason, message := c.getVolumePhaseMessageReason(pvcName, vmi.Namespace)
-		statusCopy.Phase = phase
-		log.Log.V(3).Infof("Setting phase %s for volume %s", phase, volumeName)
-		statusCopy.Message = message
-		statusCopy.Reason = reason
 	}
 
 	*status = *statusCopy
@@ -278,29 +273,33 @@ func (c *Controller) updateVolumeStatus(vmi *virtv1.VirtualMachineInstance, virt
 
 	backendStoragePVC := backendstorage.PVCForVMI(c.pvcIndexer, vmi)
 	if backendStoragePVC != nil {
-		backendStorage, ok := oldStatusMap[backendstorage.VolumeName]
-		if !ok {
-			// TODO https://github.com/kubevirt/kubevirt/issues/17369
-			// Fall back to the legacy volume name (the PVC name itself) used by older VMIs
-			backendStorage, ok = oldStatusMap[backendStoragePVC.Name]
-			if ok {
-				backendStorage.Name = backendstorage.VolumeName
-			}
-		}
-		if ok {
+		if backendStorage, ok := oldStatusMap[backendStoragePVC.Name]; ok {
 			newStatus = append(newStatus, backendStorage)
 		}
 	}
 
 	for _, volume := range vmi.Spec.Volumes {
+		existingStatus, hadStatus := oldStatusMap[volume.Name]
 		status := virtv1.VolumeStatus{}
-		if existingStatus, ok := oldStatusMap[volume.Name]; ok {
+		if hadStatus {
 			status = existingStatus
 		} else {
 			status.Name = volume.Name
 		}
 		// Remove from map so I can detect existing volumes that have been removed from spec.
 		delete(oldStatusMap, volume.Name)
+
+		// When node-local hotplug is enabled, virt-handler owns the
+		// entire volume status lifecycle. The controller simply
+		// preserves whatever status already exists and does not write
+		// any new entries — the gRPC server on virt-handler creates
+		// them. This avoids any race between the two writers.
+		if _, isHotplug := hotplugVolumesMap[volume.Name]; isHotplug && c.clusterConfig.NodeLocalHotplugEnabled() {
+			if hadStatus {
+				newStatus = append(newStatus, status)
+			}
+			continue
+		}
 
 		if volume.MemoryDump != nil && status.MemoryDumpVolume == nil {
 			status.MemoryDumpVolume = &virtv1.DomainMemoryDumpInfo{
@@ -342,6 +341,20 @@ func (c *Controller) updateVolumeStatus(vmi *virtv1.VirtualMachineInstance, virt
 	// We have updated the status of current volumes, but if a volume was removed, we want to keep that status, until there is no
 	// associated pod, then remove it. Any statuses left in the map are statuses without a matching volume in the spec.
 	for volumeName, status := range oldStatusMap {
+		// Node-local volumes have no attachment pod. Retain the status
+		// until virt-handler advances the phase to UnMountedFromPod,
+		// then allow it to be dropped on the next reconcile.
+		if status.HotplugVolume != nil && status.HotplugVolume.NodeLocal && c.clusterConfig.NodeLocalHotplugEnabled() {
+			if status.Phase != virtv1.HotplugVolumeUnMounted {
+				status.Phase = phaseForUnpluggedVolume(status.Phase)
+				log.Log.V(3).Infof("Setting phase %s for node-local volume %s (no attachment pod)", status.Phase, volumeName)
+				newStatus = append(newStatus, status)
+			} else {
+				log.Log.Object(vmi).V(3).Infof("Deleted status for node-local volume %s (UnMountedFromPod)", volumeName)
+			}
+			continue
+		}
+
 		attachmentPod := findAttachmentPodByVolumeName(volumeName, attachmentPods)
 		if attachmentPod != nil {
 			status.HotplugVolume.AttachPodName = attachmentPod.Name
@@ -494,3 +507,4 @@ func (c *Controller) requireVolumesUpdate(vmi *virtv1.VirtualMachineInstance) bo
 
 	return false
 }
+

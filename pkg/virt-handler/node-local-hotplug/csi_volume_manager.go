@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"kubevirt.io/client-go/kubecli"
 	"kubevirt.io/client-go/log"
-
 	"kubevirt.io/kubevirt/pkg/util"
 )
 
@@ -245,7 +244,7 @@ func publishCSIVolume(ctx context.Context, virtCli kubecli.KubevirtClient, kubel
 		return false, nil
 	}
 
-	if driverRequiresAttach(ctx, virtCli, info.Driver) {
+	if driverRequiresAttach(ctx, virtCli, info.Driver) && driverSupportsControllerPublish(ctx, socketPath) {
 		if _, err := csiControllerPublish(ctx, socketPath, nodeName, info); err != nil {
 			return false, fmt.Errorf("ControllerPublish for volume %s: %w", info.VolumeHandle, err)
 		}
@@ -280,7 +279,7 @@ func unpublishCSIVolume(ctx context.Context, virtCli kubecli.KubevirtClient, kub
 		return err
 	}
 
-	if driverRequiresAttach(ctx, virtCli, info.Driver) {
+	if driverRequiresAttach(ctx, virtCli, info.Driver) && driverSupportsControllerPublish(ctx, socketPath) {
 		if err := csiControllerUnpublish(ctx, socketPath, nodeName, info); err != nil {
 			return err
 		}
@@ -357,10 +356,35 @@ func driverRequiresAttach(ctx context.Context, virtCli kubecli.KubevirtClient, d
 		return true
 	}
 	if csiDriver.Spec.AttachRequired != nil && !*csiDriver.Spec.AttachRequired {
-		log.DefaultLogger().V(3).Infof("CSIDriver %s has attachRequired=false, skipping VolumeAttachment", driverName)
+		log.DefaultLogger().V(3).Infof("CSIDriver %s has attachRequired=false, skipping ControllerPublish", driverName)
 		return false
 	}
 	return true
+}
+
+// driverSupportsControllerPublish probes the CSI driver's actual controller
+// capabilities via gRPC. Some drivers declare attachRequired in their CSIDriver
+// object but don't implement ControllerPublishVolume (e.g. csi-hostpath).
+func driverSupportsControllerPublish(ctx context.Context, socketPath string) bool {
+	conn, err := newCSIConn(socketPath)
+	if err != nil {
+		return true
+	}
+	defer conn.Close()
+
+	client := csi.NewControllerClient(conn)
+	resp, err := client.ControllerGetCapabilities(ctx, &csi.ControllerGetCapabilitiesRequest{})
+	if err != nil {
+		log.DefaultLogger().V(3).Infof("ControllerGetCapabilities failed, assuming publish supported: %v", err)
+		return true
+	}
+	for _, cap := range resp.GetCapabilities() {
+		if rpc := cap.GetRpc(); rpc != nil && rpc.GetType() == csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME {
+			return true
+		}
+	}
+	log.DefaultLogger().V(3).Infof("CSI driver does not advertise PUBLISH_UNPUBLISH_VOLUME capability")
+	return false
 }
 
 func csiStagingTargetPath(kubeletPodsDir, pvName string) string {
@@ -368,9 +392,66 @@ func csiStagingTargetPath(kubeletPodsDir, pvName string) string {
 	return filepath.Join(kubeletRoot, "plugins", "kubevirt.io", "node-local-hotplug", "staging", pvName)
 }
 
+// csiNodePluginSocketPath finds the CSI node plugin socket for a driver.
+//
+// CSI drivers don't always use their driver name as the plugin directory name
+// (e.g. "hostpath.csi.k8s.io" may live at plugins/csi-hostpath/csi.sock).
+//
+// Strategy:
+//  1. Try conventional path: plugins/<driverName>/csi.sock
+//  2. Scan plugins/ subdirectories for csi.sock and call CSI Identity
+//     GetPluginInfo to match the driver name
 func csiNodePluginSocketPath(kubeletPodsDir, driverName string) string {
 	kubeletRoot := kubeletRootFromPodsDir(kubeletPodsDir)
-	return filepath.Join(util.HostRootMount, kubeletRoot, "plugins", driverName, "csi.sock")
+	pluginsDir := filepath.Join(util.HostRootMount, kubeletRoot, "plugins")
+
+	conventional := filepath.Join(pluginsDir, driverName, "csi.sock")
+	if _, err := os.Stat(conventional); err == nil {
+		return conventional
+	}
+
+	entries, err := os.ReadDir(pluginsDir)
+	if err != nil {
+		return conventional
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		candidate := filepath.Join(pluginsDir, entry.Name(), "csi.sock")
+		if _, serr := os.Stat(candidate); serr != nil {
+			continue
+		}
+		name, ierr := csiGetPluginName(candidate)
+		if ierr != nil {
+			log.DefaultLogger().V(5).Infof("Skipping %s: GetPluginInfo failed: %v", candidate, ierr)
+			continue
+		}
+		if name == driverName {
+			log.DefaultLogger().V(3).Infof("CSI socket for driver %s found at %s", driverName, candidate)
+			return candidate
+		}
+	}
+
+	return conventional
+}
+
+// csiGetPluginName calls CSI Identity.GetPluginInfo on a socket and returns
+// the driver name reported by the plugin.
+func csiGetPluginName(socketPath string) (string, error) {
+	conn, err := newCSIConn(socketPath)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	client := csi.NewIdentityClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	resp, err := client.GetPluginInfo(ctx, &csi.GetPluginInfoRequest{})
+	if err != nil {
+		return "", err
+	}
+	return resp.GetName(), nil
 }
 
 // csiDriverFromPVC extracts the CSI driver name from a PVC. It checks the
@@ -613,3 +694,4 @@ func deleteVolumeAttachment(ctx context.Context, virtCli kubecli.KubevirtClient,
 	}
 	return nil
 }
+

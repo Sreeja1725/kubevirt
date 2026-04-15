@@ -21846,6 +21846,13 @@ func schema_kubevirtio_api_core_v1_HotplugVolumeStatus(ref common.ReferenceCallb
 							Format:      "",
 						},
 					},
+					"nodeLocal": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeLocal indicates the volume was attached directly by virt-handler on the node (via the node-local hotplug server) and does not need an attachment pod managed by virt-controller.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},

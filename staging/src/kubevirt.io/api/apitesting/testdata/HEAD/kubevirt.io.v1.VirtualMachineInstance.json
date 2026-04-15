@@ -1083,7 +1083,8 @@
         },
         "hotplugVolume": {
           "attachPodName": "attachPodNameValue",
-          "attachPodUID": "attachPodUIDValue"
+          "attachPodUID": "attachPodUIDValue",
+          "nodeLocal": true
         },
         "size": -4,
         "memoryDumpVolume": {

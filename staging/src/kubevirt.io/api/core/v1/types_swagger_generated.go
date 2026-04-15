@@ -164,6 +164,7 @@ func (HotplugVolumeStatus) SwaggerDoc() map[string]string {
 		"":              "HotplugVolumeStatus represents the hotplug status of the volume",
 		"attachPodName": "AttachPodName is the name of the pod used to attach the volume to the node.",
 		"attachPodUID":  "AttachPodUID is the UID of the pod used to attach the volume to the node.",
+		"nodeLocal":     "NodeLocal indicates the volume was attached directly by virt-handler on\nthe node (via the node-local hotplug server) and does not need an\nattachment pod managed by virt-controller.",
 	}
 }
 

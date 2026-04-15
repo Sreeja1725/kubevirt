@@ -212,7 +212,7 @@ func publishFile(targetBase *safepath.Path, volumeName, sourcePath string) error
 	if err != nil {
 		return err
 	}
-	src, err := safepath.NewPathNoFollow(sourcePath)
+	src, err := resolveSourceSafepath(sourcePath)
 	if err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func publishDir(targetBase *safepath.Path, volumeName, sourcePath string) error 
 	if err != nil {
 		return err
 	}
-	src, err := safepath.NewPathNoFollow(sourcePath)
+	src, err := resolveSourceSafepath(sourcePath)
 	if err != nil {
 		return err
 	}
@@ -240,6 +240,19 @@ func publishDir(targetBase *safepath.Path, volumeName, sourcePath string) error 
 		return fmt.Errorf("bind-mount dir: %s: %w", string(out), err)
 	}
 	return diskutils.DefaultOwnershipManager.SetFileOwnership(target)
+}
+
+// resolveSourceSafepath converts an absolute source path into a safepath.Path.
+// Paths under the host root mount (/proc/1/root/...) are split so that
+// /proc/1/root is the rootBase and the remainder is the relative path,
+// matching how the existing hotplug mount code handles host paths.
+func resolveSourceSafepath(sourcePath string) (*safepath.Path, error) {
+	hostRoot := strings.TrimSuffix(util.HostRootMount, "/")
+	if strings.HasPrefix(sourcePath, hostRoot+"/") {
+		rel := strings.TrimPrefix(sourcePath, hostRoot)
+		return safepath.JoinAndResolveWithRelativeRoot(hostRoot, rel)
+	}
+	return safepath.NewPathNoFollow(sourcePath)
 }
 
 // cleanupFromLauncher revokes cgroup rules (for block devices), unmounts

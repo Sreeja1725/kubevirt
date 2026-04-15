@@ -228,6 +228,8 @@ const (
 	// The VGPULiveMigration fg enables the vGPU hook to run for vGPU live migrations, allowing the
 	// target XML's mdev UUID to be mutated.
 	VGPULiveMigration = "VGPULiveMigration"
+
+	NodeLocalHotplugGate = "NodeLocalHotplug"
 )
 
 func init() {
@@ -272,5 +274,6 @@ func init() {
 	RegisterFeatureGate(FeatureGate{Name: ReservedOverheadMemlock, State: Alpha})
 	RegisterFeatureGate(FeatureGate{Name: OptOutRoleAggregation, State: Alpha})
 	RegisterFeatureGate(FeatureGate{Name: LiveUpdateNADRef, State: Beta})
+	RegisterFeatureGate(FeatureGate{Name: NodeLocalHotplugGate, State: Alpha})
 	RegisterFeatureGate(FeatureGate{Name: VGPULiveMigration, State: Alpha})
 }

@@ -857,9 +857,51 @@ spec:
           resources:
           - virtualmachineinstances
           verbs:
+          - get
           - update
           - list
           - watch
+        - apiGroups:
+          - kubevirt.io
+          resources:
+          - virtualmachineinstances/status
+          verbs:
+          - patch
+        - apiGroups:
+          - subresources.kubevirt.io
+          resources:
+          - virtualmachineinstances/addvolume
+          - virtualmachineinstances/removevolume
+          verbs:
+          - update
+        - apiGroups:
+          - ""
+          resources:
+          - persistentvolumeclaims
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - persistentvolumes
+          verbs:
+          - get
+          - create
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+        - apiGroups:
+          - storage.k8s.io
+          resources:
+          - storageclasses
+          - csidrivers
+          verbs:
+          - get
         - apiGroups:
           - ""
           resources:

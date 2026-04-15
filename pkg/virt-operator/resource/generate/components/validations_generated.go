@@ -15348,6 +15348,12 @@ var CRDsValidation map[string]string = map[string]string{
                     description: AttachPodUID is the UID of the pod used to attach
                       the volume to the node.
                     type: string
+                  nodeLocal:
+                    description: |-
+                      NodeLocal indicates the volume was attached directly by virt-handler on
+                      the node (via the node-local hotplug server) and does not need an
+                      attachment pod managed by virt-controller.
+                    type: boolean
                 type: object
               memoryDumpVolume:
                 description: If the volume is memorydump volume, this will contain
