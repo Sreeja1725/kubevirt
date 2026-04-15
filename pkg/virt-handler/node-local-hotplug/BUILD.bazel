@@ -1,0 +1,38 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "csi_volume_manager.go",
+        "publish.go",
+        "server.go",
+        "volume_manager.go",
+        "volume_resolver.go",
+    ],
+    importpath = "kubevirt.io/kubevirt/pkg/virt-handler/node-local-hotplug",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/ephemeral-disk-utils:go_default_library",
+        "//pkg/hotplug-disk:go_default_library",
+        "//pkg/safepath:go_default_library",
+        "//pkg/unsafepath:go_default_library",
+        "//pkg/util:go_default_library",
+        "//pkg/virt-config:go_default_library",
+        "//pkg/virt-handler/cgroup:go_default_library",
+        "//pkg/virt-handler/node-local-hotplug/v1:go_default_library",
+        "//pkg/virt-handler/virt-chroot:go_default_library",
+        "//staging/src/kubevirt.io/api/core/v1:go_default_library",
+        "//staging/src/kubevirt.io/client-go/kubecli:go_default_library",
+        "//staging/src/kubevirt.io/client-go/log:go_default_library",
+        "//vendor/github.com/opencontainers/runc/libcontainer/configs:go_default_library",
+        "//vendor/github.com/opencontainers/runc/libcontainer/devices:go_default_library",
+        "//vendor/golang.org/x/sys/unix:go_default_library",
+        "//vendor/google.golang.org/grpc:go_default_library",
+        "//vendor/google.golang.org/grpc/credentials/insecure:go_default_library",
+        "//vendor/k8s.io/api/core/v1:go_default_library",
+        "//vendor/k8s.io/api/storage/v1:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/types:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/util/wait:go_default_library",
+    ],
+)
