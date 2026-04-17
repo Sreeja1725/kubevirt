@@ -764,6 +764,13 @@ spec:
         containerPath:
           path: pathValue
           readOnly: true
+        customVolume:
+          ephemeralLocal:
+            size: sizeValue
+          persistentRegional:
+            cluster: clusterValue
+            handle: handleValue
+            unencrypted: true
         dataVolume:
           hotpluggable: true
           name: nameValue
@@ -910,6 +917,13 @@ status:
       - dryRunValue
       name: nameValue
       volumeSource:
+        customVolume:
+          ephemeralLocal:
+            size: sizeValue
+          persistentRegional:
+            cluster: clusterValue
+            handle: handleValue
+            unencrypted: true
         dataVolume:
           hotpluggable: true
           name: nameValue

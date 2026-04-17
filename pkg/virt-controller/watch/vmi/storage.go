@@ -507,4 +507,3 @@ func (c *Controller) requireVolumesUpdate(vmi *virtv1.VirtualMachineInstance) bo
 
 	return false
 }
-

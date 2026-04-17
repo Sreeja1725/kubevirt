@@ -182,14 +182,14 @@ func verifyHotplugVolumes(newHotplugVolumeMap, oldHotplugVolumeMap map[string]v1
 				}
 			}
 		} else {
-			// This is a new volume, ensure that the volume is either DV, PVC or memoryDumpVolume
-			if v.DataVolume == nil && v.PersistentVolumeClaim == nil && v.MemoryDump == nil {
-				return webhookutils.ToAdmissionResponse([]metav1.StatusCause{
-					{
-						Type:    metav1.CauseTypeFieldValueInvalid,
-						Message: fmt.Sprintf("volume %s is not a PVC or DataVolume", k),
-					},
-				})
+		// This is a new volume, ensure that the volume is either DV, PVC, memoryDumpVolume, or CustomVolume
+		if v.DataVolume == nil && v.PersistentVolumeClaim == nil && v.MemoryDump == nil && v.CustomVolume == nil {
+			return webhookutils.ToAdmissionResponse([]metav1.StatusCause{
+				{
+					Type:    metav1.CauseTypeFieldValueInvalid,
+					Message: fmt.Sprintf("volume %s is not a PVC, DataVolume, or CustomVolume", k),
+				},
+			})
 			}
 			if v.MemoryDump == nil {
 				// Also ensure the matching new disk exists and has a valid bus
@@ -449,3 +449,4 @@ func ValidateUtilityVolumesNotPresentOnCreation(field *field.Path, spec *v1.Virt
 
 	return causes
 }
+

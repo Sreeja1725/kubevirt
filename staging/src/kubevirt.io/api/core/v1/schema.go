@@ -1001,6 +1001,10 @@ type VolumeSource struct {
 	// The path must correspond to an existing volumeMount in the compute container.
 	// +optional
 	ContainerPath *ContainerPathVolumeSource `json:"containerPath,omitempty"`
+	// CustomVolume represents a hotpluggable volume backed by a custom source
+	// (persistent regional CSI volume or on-demand ephemeral image).
+	// +optional
+	CustomVolume *CustomVolumeSource `json:"customVolume,omitempty"`
 }
 
 // HotplugVolumeSource Represents the source of a volume to mount which are capable
@@ -1016,6 +1020,42 @@ type HotplugVolumeSource struct {
 	// the process of populating that PVC with a disk image.
 	// +optional
 	DataVolume *DataVolumeSource `json:"dataVolume,omitempty"`
+	// CustomVolume represents a hotpluggable volume backed by a custom source
+	// (persistent regional CSI volume or on-demand ephemeral image).
+	// +optional
+	CustomVolume *CustomVolumeSource `json:"customVolume,omitempty"`
+}
+
+// CustomVolumeSource represents a volume source for node-local hotplug
+// that does not use a standard PVC or DataVolume. Exactly one sub-type
+// must be specified.
+type CustomVolumeSource struct {
+	// PersistentRegional references a pre-existing CSI volume by its handle and driver.
+	// +optional
+	PersistentRegional *PersistentRegionalVolumeSource `json:"persistentRegional,omitempty"`
+	// Ephemeral creates a local qcow2 disk image of the given size on the node.
+	// The image is deleted when the volume is detached.
+	// +optional
+	EphemeralLocal *EphemeralLocalCustomVolumeSource `json:"ephemeralLocal,omitempty"`
+}
+
+// PersistentRegionalVolumeSource identifies a CSI volume by its handle
+// and driver name, bypassing PVC/PV resolution.
+type PersistentRegionalVolumeSource struct {
+	// Handle is the CSI VolumeHandle (e.g. "volume_name:volume_uuid").
+	Handle string `json:"handle"`
+	// Unencrypted indicates the volume should not use encryption.
+	// +optional
+	Unencrypted bool `json:"unencrypted,omitempty"`
+	// Cluster is the name of the cluster that the volume is in.
+	Cluster string `json:"cluster,omitempty"`
+}
+
+// EphemeralLocalCustomVolumeSource creates a local qcow2 image on the node.
+type EphemeralLocalCustomVolumeSource struct {
+	// Size is the capacity of the ephemeral disk as a Kubernetes
+	// quantity string (e.g. "100Gi", "500Mi").
+	Size string `json:"size"`
 }
 
 type DataVolumeSource struct {

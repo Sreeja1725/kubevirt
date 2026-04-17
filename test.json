@@ -1,0 +1,13 @@
+{
+  "name": "hotplug1",
+  "disk": {
+    "name": "hotplug1",
+    "serial": "hp1-x7k9m2",
+    "disk": { "bus": "scsi" }
+  },
+  "volumeSource": {
+    "customVolume": {
+      "ephemeralLocal": { "size": "1Gi" }
+    }
+  }
+}

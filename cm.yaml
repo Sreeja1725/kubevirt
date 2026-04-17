@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hotplug-config
+  namespace: kubevirt
+data:
+  config.yaml: |
+    persistentRegional:
+      csiSocketPath: /var/lib/kubelet/plugins/csi-hostpath/csi.sock
+    ephemeral:
+      csiSocketPath: /var/lib/kubelet/plugins/csi-hostpath/csi.sock
+      stagingPath: /var/lib/kubelet/plugins/kubevirt.io/node-local-hotplug/staging
+    encryption:
+      espEnabled: false

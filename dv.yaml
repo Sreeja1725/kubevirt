@@ -1,0 +1,15 @@
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: hotplug-dv-test
+spec:
+  source:
+    registry:
+      url: "docker://quay.io/kubevirt/cirros-container-disk-demo:latest"
+  storage:
+    storageClassName: csi-hostpath
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 1Gi

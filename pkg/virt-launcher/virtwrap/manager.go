@@ -1306,6 +1306,11 @@ func (l *LibvirtDomainManager) syncDisks(
 			return err
 		}
 	}
+
+	if err := prepareCustomEphemeralHotplugDisks(vmi, logger); err != nil {
+		return err
+	}
+
 	// Look up all the disks to attach
 	for _, attachDisk := range getAttachedDisks(spec.Devices.Disks, domain.Spec.Devices.Disks) {
 		ds := disksource.Resolve(attachDisk)
@@ -1505,6 +1510,38 @@ func checkIfDiskReadyToUseFunc(filename string) (bool, error) {
 		return false, fmt.Errorf("Unable to close file: %s", file.Name())
 	}
 	return true, nil
+}
+
+func prepareCustomEphemeralHotplugDisks(vmi *v1.VirtualMachineInstance, logger *log.FilteredLogger) error {
+	for _, volume := range vmi.Spec.Volumes {
+		if volume.CustomVolume == nil || volume.CustomVolume.EphemeralLocal == nil {
+			continue
+		}
+		dirPath := filepath.Join(v1.HotplugDiskDir, volume.Name)
+		info, err := os.Stat(dirPath)
+		if err != nil || !info.IsDir() {
+			continue
+		}
+		imgPath := filepath.Join(dirPath, "disk.qcow2")
+		if _, err := os.Stat(imgPath); err == nil {
+			continue
+		}
+		qty := resource.MustParse(volume.CustomVolume.EphemeralLocal.Size)
+		sizeBytes := kutil.AlignImageSizeTo1MiB(qty.Value(), logger.With("volume", volume.Name))
+		if sizeBytes == 0 {
+			return fmt.Errorf("custom ephemeral volume %s size is too low", volume.Name)
+		}
+		// #nosec No risk for attacker injection. Parameters are predefined strings
+		out, err := exec.Command("/usr/bin/qemu-img", "create", "-f", "qcow2", imgPath, strconv.FormatInt(sizeBytes, 10)).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("qemu-img create for custom ephemeral volume %s: %w, output: %s", volume.Name, err, string(out))
+		}
+		if err := os.Chmod(imgPath, 0640); err != nil {
+			return fmt.Errorf("chmod for custom ephemeral volume %s: %w", volume.Name, err)
+		}
+		logger.Infof("Created custom ephemeral disk image %s (%d bytes)", imgPath, sizeBytes)
+	}
+	return nil
 }
 
 func getDetachedDisks(oldDisks, newDisks []api.Disk) []api.Disk {
@@ -2653,3 +2690,4 @@ func (l *LibvirtDomainManager) BackupVirtualMachine(vmi *v1.VirtualMachineInstan
 func (l *LibvirtDomainManager) RedefineCheckpoint(vmi *v1.VirtualMachineInstance, checkpoint *backupv1.BackupCheckpoint) (checkpointInvalid bool, err error) {
 	return l.storageManager.RedefineCheckpoint(vmi, checkpoint)
 }
+

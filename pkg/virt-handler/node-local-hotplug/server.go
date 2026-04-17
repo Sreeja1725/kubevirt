@@ -29,7 +29,10 @@ import (
 	"google.golang.org/grpc"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	v1 "kubevirt.io/api/core/v1"
 	"kubevirt.io/client-go/kubecli"
 	"kubevirt.io/client-go/log"
@@ -47,63 +50,78 @@ type Server struct {
 	virtCli        kubecli.KubevirtClient
 	clusterConfig  *virtconfig.ClusterConfig
 	kubeletPodsDir string
+	hotplugConfig  *Config
 }
 
-func NewServer(host string, virtCli kubecli.KubevirtClient, clusterConfig *virtconfig.ClusterConfig, kubeletPodsDir string) *Server {
+func NewServer(host string, virtCli kubecli.KubevirtClient, clusterConfig *virtconfig.ClusterConfig, kubeletPodsDir string) (*Server, error) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("node-local hotplug server: %w", err)
+	}
 	return &Server{
 		host:           host,
 		virtCli:        virtCli,
 		clusterConfig:  clusterConfig,
 		kubeletPodsDir: kubeletPodsDir,
-	}
+		hotplugConfig:  cfg,
+	}, nil
 }
 
 // patchVolumePhase does a read-modify-write on the VMI to set a single
 // volume's phase, message, reason, and marks HotplugVolume.NodeLocal=true
 // so virt-controller skips attachment pod creation.
+// Uses retry.RetryOnConflict to handle concurrent updates by virt-controller.
 func (s *Server) patchVolumePhase(ctx context.Context, ns, vmiName, volumeName string, phase v1.VolumePhase, reason, message string) error {
-	vmi, err := s.virtCli.VirtualMachineInstance(ns).Get(ctx, vmiName, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("get VMI %s/%s: %w", ns, vmiName, err)
-	}
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		vmi, err := s.virtCli.VirtualMachineInstance(ns).Get(ctx, vmiName, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("get VMI %s/%s: %w", ns, vmiName, err)
+		}
 
-	found := false
-	for i := range vmi.Status.VolumeStatus {
-		vs := &vmi.Status.VolumeStatus[i]
-		if vs.Name == volumeName {
-			if vs.HotplugVolume == nil {
-				vs.HotplugVolume = &v1.HotplugVolumeStatus{}
+		found := false
+		for i := range vmi.Status.VolumeStatus {
+			vs := &vmi.Status.VolumeStatus[i]
+			if vs.Name == volumeName {
+				if vs.HotplugVolume == nil {
+					vs.HotplugVolume = &v1.HotplugVolumeStatus{}
+				}
+				vs.HotplugVolume.NodeLocal = true
+				vs.Phase = phase
+				vs.Reason = reason
+				vs.Message = message
+				found = true
+				break
 			}
-			vs.HotplugVolume.NodeLocal = true
-			vs.Phase = phase
-			vs.Reason = reason
-			vs.Message = message
-			found = true
-			break
 		}
-	}
-	if !found {
-		newEntry := v1.VolumeStatus{
-			Name: volumeName,
-			HotplugVolume: &v1.HotplugVolumeStatus{
-				NodeLocal: true,
-			},
-			Phase:   phase,
-			Reason:  reason,
-			Message: message,
+		if !found {
+			newEntry := v1.VolumeStatus{
+				Name: volumeName,
+				HotplugVolume: &v1.HotplugVolumeStatus{
+					NodeLocal: true,
+				},
+				Phase:   phase,
+				Reason:  reason,
+				Message: message,
+			}
+			if pvcInfo := s.buildPVCInfo(ctx, vmi, volumeName); pvcInfo != nil {
+				newEntry.PersistentVolumeClaimInfo = pvcInfo
+			} else if cvInfo := buildCustomVolumeInfo(vmi, volumeName); cvInfo != nil {
+				newEntry.PersistentVolumeClaimInfo = cvInfo
+			}
+			vmi.Status.VolumeStatus = append(vmi.Status.VolumeStatus, newEntry)
 		}
-		if pvcInfo := s.buildPVCInfo(ctx, vmi, volumeName); pvcInfo != nil {
-			newEntry.PersistentVolumeClaimInfo = pvcInfo
-		}
-		vmi.Status.VolumeStatus = append(vmi.Status.VolumeStatus, newEntry)
-	}
 
-	_, err = s.virtCli.VirtualMachineInstance(ns).Update(ctx, vmi, metav1.UpdateOptions{})
-	if err != nil {
-		return fmt.Errorf("update VMI for volume %q phase %s: %w", volumeName, phase, err)
-	}
-	log.DefaultLogger().V(3).Infof("Updated volume %q phase to %s on VMI %s/%s", volumeName, phase, ns, vmiName)
-	return nil
+		_, err = s.virtCli.VirtualMachineInstance(ns).Update(ctx, vmi, metav1.UpdateOptions{})
+		if errors.IsConflict(err) {
+			log.DefaultLogger().V(3).Infof("Conflict updating volume %q phase on VMI %s/%s, retrying", volumeName, ns, vmiName)
+			return err
+		}
+		if err != nil {
+			return fmt.Errorf("update VMI for volume %q phase %s: %w", volumeName, phase, err)
+		}
+		log.DefaultLogger().V(3).Infof("Updated volume %q phase to %s on VMI %s/%s", volumeName, phase, ns, vmiName)
+		return nil
+	})
 }
 
 // buildPVCInfo looks up the PVC for a volume and returns PersistentVolumeClaimInfo
@@ -132,6 +150,40 @@ func (s *Server) buildPVCInfo(ctx context.Context, vmi *v1.VirtualMachineInstanc
 		Requests:     pvc.Spec.Resources.Requests,
 		Preallocated: storagetypes.IsPreallocated(pvc.ObjectMeta.Annotations),
 	}
+}
+
+// buildCustomVolumeInfo synthesizes PersistentVolumeClaimInfo for custom
+// volumes so that downstream code (e.g. isBlockVolume) can determine the
+// volume mode without an actual PVC.
+func buildCustomVolumeInfo(vmi *v1.VirtualMachineInstance, volumeName string) *v1.PersistentVolumeClaimInfo {
+	for _, vol := range vmi.Spec.Volumes {
+		if vol.Name != volumeName || vol.CustomVolume == nil {
+			continue
+		}
+		cv := vol.CustomVolume
+		if cv.PersistentRegional != nil {
+			blockMode := corev1.PersistentVolumeBlock
+			return &v1.PersistentVolumeClaimInfo{
+				VolumeMode: &blockMode,
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+			}
+		}
+		if cv.EphemeralLocal != nil {
+			fsMode := corev1.PersistentVolumeFilesystem
+			return &v1.PersistentVolumeClaimInfo{
+				VolumeMode: &fsMode,
+				Capacity: corev1.ResourceList{
+					corev1.ResourceStorage: *resource.NewQuantity(0, resource.BinarySI),
+				},
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Server) AttachVolume(ctx context.Context, req *pb.AttachVolumeRequest) (*pb.AttachVolumeResponse, error) {
@@ -234,8 +286,6 @@ func (s *Server) RemoveVolume(ctx context.Context, req *pb.RemoveVolumeRequest) 
 		return &pb.RemoveVolumeResponse{Success: false, Message: fmt.Sprintf("failed to get VMI %s/%s: %v", ns, vmiName, err)}, nil
 	}
 
-	preRemoveVol := volumeSpecByName(vmi, volName)
-
 	volReq := &v1.VirtualMachineVolumeRequest{
 		RemoveVolumeOptions: &v1.RemoveVolumeOptions{
 			Name:   req.GetVolumeName(),
@@ -254,6 +304,17 @@ func (s *Server) RemoveVolume(ctx context.Context, req *pb.RemoveVolumeRequest) 
 	if patchErr := s.patchVolumePhase(ctx, ns, vmiName, volName,
 		v1.HotplugVolumeDetaching, "NodeLocalHotplug", fmt.Sprintf("Detaching volume %s via node-local hotplug", volName)); patchErr != nil {
 		log.DefaultLogger().Reason(patchErr).Errorf("Failed to patch Detaching phase for volume %s on %s/%s", volName, ns, vmiName)
+	}
+
+	var preRemoveVol *v1.Volume
+	for i := range vmi.Spec.Volumes {
+		if vmi.Spec.Volumes[i].Name == volName {
+			preRemoveVol = &vmi.Spec.Volumes[i]
+			break
+		}
+	}
+	if preRemoveVol == nil {
+		return &pb.RemoveVolumeResponse{Success: false, Message: fmt.Sprintf("volume %q not found in VMI spec", volName)}, nil
 	}
 
 	if err := s.detachNodeLocalHotplugFromVMI(ctx, ns, vmiName, preRemoveVol); err != nil {
@@ -290,7 +351,6 @@ func volumeSpecByName(vmi *v1.VirtualMachineInstance, name string) *v1.Volume {
 // stale socket file, binds, registers the service, and serves in the
 // background. The server shuts down gracefully when ctx is cancelled.
 func StartUnix(ctx context.Context, socketPath string, srv *Server) error {
-	fmt.Println("[NodeLocalHotplug] socketPath", socketPath)
 	if socketPath == "" {
 		socketPath = SocketPath
 	}
@@ -298,8 +358,6 @@ func StartUnix(ctx context.Context, socketPath string, srv *Server) error {
 	if err := os.RemoveAll(socketPath); err != nil {
 		return fmt.Errorf("remove stale node-local hotplug socket: %w", err)
 	}
-
-	fmt.Println("[NodeLocalHotplug] listen unix")
 
 	lis, err := net.Listen("unix", socketPath)
 	if err != nil {
@@ -310,14 +368,11 @@ func StartUnix(ctx context.Context, socketPath string, srv *Server) error {
 		return fmt.Errorf("chmod node-local hotplug socket: %w", err)
 	}
 
-	fmt.Println("[NodeLocalHotplug] chmod node-local hotplug socket", socketPath)
-
 	grpcServer := grpc.NewServer()
 	pb.RegisterNodeLocalHotplugServer(grpcServer, srv)
 
 	go func() {
 		<-ctx.Done()
-		fmt.Println("[NodeLocalHotplug] ctx.Done")
 		grpcServer.GracefulStop()
 	}()
 
@@ -325,7 +380,6 @@ func StartUnix(ctx context.Context, socketPath string, srv *Server) error {
 	logger.Infof("node-local hotplug gRPC listening on unix://%s", socketPath)
 
 	go func() {
-		fmt.Println("[NodeLocalHotplug] grpcServer.Serve")
 		if err := grpcServer.Serve(lis); err != nil {
 			logger.Reason(err).Error("node-local hotplug gRPC server exited")
 		}
@@ -344,8 +398,20 @@ func buildAddVolumeOptions(spec *pb.HotplugAttachSpec) (*v1.AddVolumeOptions, er
 	}
 	pvc := vs.GetPvcClaimName()
 	dv := vs.GetDataVolumeName()
-	if (pvc == "" && dv == "") || (pvc != "" && dv != "") {
-		return nil, fmt.Errorf("attach_spec.volume_source must set exactly one of pvc_claim_name or data_volume_name")
+	cv := vs.GetCustomVolume()
+
+	setCount := 0
+	if pvc != "" {
+		setCount++
+	}
+	if dv != "" {
+		setCount++
+	}
+	if cv != nil {
+		setCount++
+	}
+	if setCount != 1 {
+		return nil, fmt.Errorf("attach_spec.volume_source must set exactly one of pvc_claim_name, data_volume_name, or custom_volume")
 	}
 
 	opts := &v1.AddVolumeOptions{
@@ -359,11 +425,31 @@ func buildAddVolumeOptions(spec *pb.HotplugAttachSpec) (*v1.AddVolumeOptions, er
 			},
 			Hotpluggable: true,
 		}
-	} else {
+	} else if dv != "" {
 		opts.VolumeSource.DataVolume = &v1.DataVolumeSource{
 			Name:         dv,
 			Hotpluggable: true,
 		}
+	} else if cv != nil {
+		cvSrc := &v1.CustomVolumeSource{}
+		if pr := cv.GetPersistentRegional(); pr != nil {
+			cvSrc.PersistentRegional = &v1.PersistentRegionalVolumeSource{
+				Handle:      pr.GetHandle(),
+				Unencrypted: pr.GetUnencrypted(),
+				Cluster:     pr.GetCluster(),
+			}
+		} else if eph := cv.GetEphemeralLocal(); eph != nil {
+			qty, err := resource.ParseQuantity(eph.GetSize())
+			if err != nil {
+				return nil, fmt.Errorf("invalid ephemeral size %q: %w", eph.GetSize(), err)
+			}
+			cvSrc.EphemeralLocal = &v1.EphemeralLocalCustomVolumeSource{
+				Size: qty.String(),
+			}
+		} else {
+			return nil, fmt.Errorf("custom_volume must set persistent_regional or ephemeral_local")
+		}
+		opts.VolumeSource.CustomVolume = cvSrc
 	}
 
 	diskPart := spec.GetDisk()
@@ -422,7 +508,8 @@ func verifyVolumeOption(volumes []v1.Volume, volumeRequest *v1.VirtualMachineVol
 
 func volumeHotpluggable(volume v1.Volume) bool {
 	return (volume.DataVolume != nil && volume.DataVolume.Hotpluggable) ||
-		(volume.PersistentVolumeClaim != nil && volume.PersistentVolumeClaim.Hotpluggable)
+		(volume.PersistentVolumeClaim != nil && volume.PersistentVolumeClaim.Hotpluggable) ||
+		volume.CustomVolume != nil
 }
 
 func volumeSourceExists(volume v1.Volume, volumeName string) bool {
@@ -447,6 +534,12 @@ func volumeSourceName(volumeSource *v1.HotplugVolumeSource) string {
 	}
 	if volumeSource.PersistentVolumeClaim != nil {
 		return volumeSource.PersistentVolumeClaim.ClaimName
+	}
+	if volumeSource.CustomVolume != nil {
+		if volumeSource.CustomVolume.PersistentRegional != nil {
+			return volumeSource.CustomVolume.PersistentRegional.Handle
+		}
+		return ""
 	}
 	return ""
 }

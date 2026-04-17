@@ -504,6 +504,7 @@ func (VolumeSource) SwaggerDoc() map[string]string {
 		"downwardMetrics":       "DownwardMetrics adds a very small disk to VMIs which contains a limited view of host and guest\nmetrics. The disk content is compatible with vhostmd (https://github.com/vhostmd/vhostmd) and vm-dump-metrics.",
 		"memoryDump":            "MemoryDump is attached to the virt launcher and is populated with a memory dump of the vmi",
 		"containerPath":         "ContainerPath exposes a path from the virt-launcher container to the VM via virtiofs.\nThe path must correspond to an existing volumeMount in the compute container.\n+optional",
+		"customVolume":          "CustomVolume represents a hotpluggable volume backed by a custom source\n(persistent regional CSI volume or on-demand ephemeral image).\n+optional",
 	}
 }
 
@@ -512,6 +513,31 @@ func (HotplugVolumeSource) SwaggerDoc() map[string]string {
 		"":                      "HotplugVolumeSource Represents the source of a volume to mount which are capable\nof being hotplugged on a live running VMI.\nOnly one of its members may be specified.",
 		"persistentVolumeClaim": "PersistentVolumeClaimVolumeSource represents a reference to a PersistentVolumeClaim in the same namespace.\nDirectly attached to the vmi via qemu.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims\n+optional",
 		"dataVolume":            "DataVolume represents the dynamic creation a PVC for this volume as well as\nthe process of populating that PVC with a disk image.\n+optional",
+		"customVolume":          "CustomVolume represents a hotpluggable volume backed by a custom source\n(persistent regional CSI volume or on-demand ephemeral image).\n+optional",
+	}
+}
+
+func (CustomVolumeSource) SwaggerDoc() map[string]string {
+	return map[string]string{
+		"":                   "CustomVolumeSource represents a volume source for node-local hotplug\nthat does not use a standard PVC or DataVolume. Exactly one sub-type\nmust be specified.",
+		"persistentRegional": "PersistentRegional references a pre-existing CSI volume by its handle and driver.\n+optional",
+		"ephemeralLocal":     "Ephemeral creates a local qcow2 disk image of the given size on the node.\nThe image is deleted when the volume is detached.\n+optional",
+	}
+}
+
+func (PersistentRegionalVolumeSource) SwaggerDoc() map[string]string {
+	return map[string]string{
+		"":            "PersistentRegionalVolumeSource identifies a CSI volume by its handle\nand driver name, bypassing PVC/PV resolution.",
+		"handle":      "Handle is the CSI VolumeHandle (e.g. \"volume_name:volume_uuid\").",
+		"unencrypted": "Unencrypted indicates the volume should not use encryption.\n+optional",
+		"cluster":     "Cluster is the name of the cluster that the volume is in.",
+	}
+}
+
+func (EphemeralLocalCustomVolumeSource) SwaggerDoc() map[string]string {
+	return map[string]string{
+		"":     "EphemeralLocalCustomVolumeSource creates a local qcow2 image on the node.",
+		"size": "Size is the capacity of the ephemeral disk as a Kubernetes\nquantity string (e.g. \"100Gi\", \"500Mi\").",
 	}
 }
 

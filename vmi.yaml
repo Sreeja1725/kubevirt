@@ -1,0 +1,25 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachineInstance
+metadata:
+  name: test-csi-nlh
+  namespace: default
+spec:
+  domain:
+    devices:
+      disks:
+        - name: rootdisk
+          disk:
+            bus: virtio
+      interfaces:
+        - name: default
+          masquerade: {}
+    resources:
+      requests:
+        memory: 128Mi
+  networks:
+    - name: default
+      pod: {}
+  volumes:
+    - name: rootdisk
+      containerDisk:
+        image: quay.io/kubevirt/cirros-container-disk-demo:latest

@@ -629,6 +629,14 @@ func Convert_v1_Hotplug_Volume_To_api_Disk(source *v1.Volume, disk *api.Disk, c 
 	if source.DataVolume != nil {
 		return Convert_v1_Hotplug_DataVolume_To_api_Disk(source.Name, disk, c)
 	}
+
+	if source.CustomVolume != nil {
+		if source.CustomVolume.PersistentRegional != nil {
+			return Convert_v1_Hotplug_CustomVolume_Regional_To_api_Disk(source.Name, disk)
+		}
+		return Convert_v1_Hotplug_CustomVolume_Ephemeral_To_api_Disk(source.Name, disk)
+	}
+
 	return fmt.Errorf("hotplug disk %s references an unsupported source", disk.Alias.GetName())
 }
 
@@ -1379,3 +1387,34 @@ func convertEFIConfiguration(input *convertertypes.EFIConfiguration) *compute.EF
 		SecureLoader: input.SecureLoader,
 	}
 }
+
+func Convert_v1_Hotplug_CustomVolume_Regional_To_api_Disk(volumeName string, disk *api.Disk) error {
+	disk.Type = "block"
+	disk.Driver.Type = "raw"
+	disk.Driver.ErrorPolicy = v1.DiskErrorPolicyStop
+	disk.Driver.Discard = "unmap"
+	disk.Driver.IO = v1.IONative
+	disk.Source.Dev = GetHotplugBlockDeviceVolumePath(volumeName)
+
+	log.DefaultLogger().Infof("Converted hotplug volume %s to disk %v", volumeName, disk)
+
+	return nil
+}
+
+func Convert_v1_Hotplug_CustomVolume_Ephemeral_To_api_Disk(volumeName string, disk *api.Disk) error {
+	disk.Type = "file"
+	disk.Device = "disk"
+
+	disk.Driver.Name = "qemu"
+	disk.Driver.Type = "qcow2"
+	disk.Driver.ErrorPolicy = v1.DiskErrorPolicyStop
+	disk.Driver.Discard = "unmap"
+	disk.Driver.IO = v1.IONative
+
+	disk.Source.File = filepath.Join(string(filepath.Separator), "var", "run", "kubevirt", "hotplug-disks", volumeName, "disk.qcow2")
+
+	log.DefaultLogger().Infof("Converted hotplug volume %s to disk %v", volumeName, disk)
+
+	return nil
+}
+

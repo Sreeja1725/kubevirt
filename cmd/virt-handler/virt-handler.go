@@ -511,10 +511,13 @@ func (app *virtHandlerApp) Run() {
 
 	nlhCtx, nlhCancel := context.WithCancel(context.Background())
 	go func() { <-stop; nlhCancel() }()
-	nlhServer := nodelocalhotplug.NewServer(app.HostOverride, app.virtCli, app.clusterConfig, app.KubeletPodsDir)
-	if err := nodelocalhotplug.StartUnix(nlhCtx, nodelocalhotplug.SocketPath, nlhServer); err != nil {
+	nlhServer, err := nodelocalhotplug.NewServer(app.HostOverride, app.virtCli, app.clusterConfig, app.KubeletPodsDir)
+	if err != nil {
+		logger.Reason(err).Error("failed to create node-local hotplug server")
+	} else if err := nodelocalhotplug.StartUnix(nlhCtx, nodelocalhotplug.SocketPath, nlhServer); err != nil {
 		logger.Reason(err).Error("failed to start node-local hotplug gRPC server")
 	}
+	_ = nlhServer
 
 	doneCh := make(chan string)
 	defer close(doneCh)

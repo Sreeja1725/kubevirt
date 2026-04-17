@@ -41,6 +41,9 @@ func IsDeclarativeHotplugVolume(vol *v1.Volume) bool {
 	if volSrc.DataVolume != nil && volSrc.DataVolume.Hotpluggable {
 		return true
 	}
+	if volSrc.CustomVolume != nil {
+		return true
+	}
 
 	return false
 }

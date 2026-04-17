@@ -14427,6 +14427,20 @@
      }
     }
    },
+   "v1.CustomVolumeSource": {
+    "description": "CustomVolumeSource represents a volume source for node-local hotplug that does not use a standard PVC or DataVolume. Exactly one sub-type must be specified.",
+    "type": "object",
+    "properties": {
+     "ephemeralLocal": {
+      "description": "Ephemeral creates a local qcow2 disk image of the given size on the node. The image is deleted when the volume is detached.",
+      "$ref": "#/definitions/v1.EphemeralLocalCustomVolumeSource"
+     },
+     "persistentRegional": {
+      "description": "PersistentRegional references a pre-existing CSI volume by its handle and driver.",
+      "$ref": "#/definitions/v1.PersistentRegionalVolumeSource"
+     }
+    }
+   },
    "v1.CustomizeComponents": {
     "type": "object",
     "properties": {
@@ -15048,6 +15062,20 @@
      }
     }
    },
+   "v1.EphemeralLocalCustomVolumeSource": {
+    "description": "EphemeralLocalCustomVolumeSource creates a local qcow2 image on the node.",
+    "type": "object",
+    "required": [
+     "size"
+    ],
+    "properties": {
+     "size": {
+      "description": "Size is the capacity of the ephemeral disk as a Kubernetes quantity string (e.g. \"100Gi\", \"500Mi\").",
+      "type": "string",
+      "default": ""
+     }
+    }
+   },
    "v1.EphemeralVolumeSource": {
     "type": "object",
     "properties": {
@@ -15493,6 +15521,10 @@
     "description": "HotplugVolumeSource Represents the source of a volume to mount which are capable of being hotplugged on a live running VMI. Only one of its members may be specified.",
     "type": "object",
     "properties": {
+     "customVolume": {
+      "description": "CustomVolume represents a hotpluggable volume backed by a custom source (persistent regional CSI volume or on-demand ephemeral image).",
+      "$ref": "#/definitions/v1.CustomVolumeSource"
+     },
      "dataVolume": {
       "description": "DataVolume represents the dynamic creation a PVC for this volume as well as the process of populating that PVC with a disk image.",
       "$ref": "#/definitions/v1.DataVolumeSource"
@@ -16993,6 +17025,28 @@
        "$ref": "#/definitions/v1.USBHostDevice"
       },
       "x-kubernetes-list-type": "atomic"
+     }
+    }
+   },
+   "v1.PersistentRegionalVolumeSource": {
+    "description": "PersistentRegionalVolumeSource identifies a CSI volume by its handle and driver name, bypassing PVC/PV resolution.",
+    "type": "object",
+    "required": [
+     "handle"
+    ],
+    "properties": {
+     "cluster": {
+      "description": "Cluster is the name of the cluster that the volume is in.",
+      "type": "string"
+     },
+     "handle": {
+      "description": "Handle is the CSI VolumeHandle (e.g. \"volume_name:volume_uuid\").",
+      "type": "string",
+      "default": ""
+     },
+     "unencrypted": {
+      "description": "Unencrypted indicates the volume should not use encryption.",
+      "type": "boolean"
      }
     }
    },
@@ -20156,6 +20210,10 @@
      "containerPath": {
       "description": "ContainerPath exposes a path from the virt-launcher container to the VM via virtiofs. The path must correspond to an existing volumeMount in the compute container.",
       "$ref": "#/definitions/v1.ContainerPathVolumeSource"
+     },
+     "customVolume": {
+      "description": "CustomVolume represents a hotpluggable volume backed by a custom source (persistent regional CSI volume or on-demand ephemeral image).",
+      "$ref": "#/definitions/v1.CustomVolumeSource"
      },
      "dataVolume": {
       "description": "DataVolume represents the dynamic creation a PVC for this volume as well as the process of populating that PVC with a disk image.",

@@ -10,7 +10,9 @@ import (
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	k8sv1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -235,26 +237,16 @@ func fsTypeFromStorageClass(sc *storagev1.StorageClass) string {
 // (convention: /var/lib/kubelet/plugins/<driver>/csi.sock). If the socket
 // is not found, returns (false, nil) and the caller must treat that as a hard error
 // for node-local hotplug (the VMI is already marked NodeLocal).
-func publishCSIVolume(ctx context.Context, virtCli kubecli.KubevirtClient, kubeletPodsDir, nodeName string, info *csiVolumeInfo, targetPath string) (bool, error) {
-	socketPath := csiNodePluginSocketPath(kubeletPodsDir, info.Driver)
-	if _, err := os.Stat(socketPath); err != nil {
-		log.DefaultLogger().V(3).Infof(
-			"CSI socket not found at %s for driver %s; deferring NodeStage/NodePublish",
-			socketPath, info.Driver)
-		return false, nil
+func publishCSIVolume(ctx context.Context, virtCli kubecli.KubevirtClient, kubeletPodsDir, nodeName string, info *csiVolumeInfo, targetPath string, hotplugConfig *Config) (bool, error) {
+	if err := csiControllerPublish(ctx, nodeName, info, hotplugConfig); err != nil {
+		return false, fmt.Errorf("ControllerPublish for volume %s: %w", info.VolumeHandle, err)
 	}
 
-	if driverRequiresAttach(ctx, virtCli, info.Driver) && driverSupportsControllerPublish(ctx, socketPath) {
-		if _, err := csiControllerPublish(ctx, socketPath, nodeName, info); err != nil {
-			return false, fmt.Errorf("ControllerPublish for volume %s: %w", info.VolumeHandle, err)
-		}
-	}
-
-	if err := csiNodeStage(ctx, socketPath, kubeletPodsDir, info, info.VolumeHandle); err != nil {
+	if err := csiNodeStage(ctx, kubeletPodsDir, info, info.VolumeHandle, false, hotplugConfig); err != nil {
 		return false, err
 	}
 
-	if err := csiNodePublish(ctx, socketPath, kubeletPodsDir, info, info.VolumeHandle, targetPath); err != nil {
+	if err := csiNodePublish(ctx, kubeletPodsDir, info, info.VolumeHandle, targetPath, hotplugConfig, false); err != nil {
 		return false, err
 	}
 
@@ -265,24 +257,17 @@ func publishCSIVolume(ctx context.Context, virtCli kubecli.KubevirtClient, kubel
 // unpublishCSIVolume reverses publishCSIVolume: NodeUnpublish, NodeUnstage, then
 // ControllerUnpublish when the driver requires attach. Best-effort removal of
 // the per-volume publish directory follows.
-func unpublishCSIVolume(ctx context.Context, virtCli kubecli.KubevirtClient, kubeletPodsDir, nodeName string, info *csiVolumeInfo, targetPath string) error {
-	socketPath := csiNodePluginSocketPath(kubeletPodsDir, info.Driver)
-	if _, err := os.Stat(socketPath); err != nil {
-		return fmt.Errorf("stat CSI socket %s: %w", socketPath, err)
-	}
-
-	if err := csiNodeUnpublish(ctx, socketPath, info, targetPath); err != nil {
+func unpublishCSIVolume(ctx context.Context, virtCli kubecli.KubevirtClient, kubeletPodsDir, nodeName string, volumeHandle string, targetPath, socketPath string) error {
+	if err := csiNodeUnpublish(ctx, socketPath, volumeHandle, targetPath); err != nil {
 		return err
 	}
 
-	if err := csiNodeUnstage(ctx, socketPath, kubeletPodsDir, info, info.VolumeHandle); err != nil {
+	if err := csiNodeUnstage(ctx, socketPath, kubeletPodsDir, volumeHandle, volumeHandle); err != nil {
 		return err
 	}
 
-	if driverRequiresAttach(ctx, virtCli, info.Driver) && driverSupportsControllerPublish(ctx, socketPath) {
-		if err := csiControllerUnpublish(ctx, socketPath, nodeName, info); err != nil {
-			return err
-		}
+	if err := csiControllerUnpublish(ctx, socketPath, nodeName, volumeHandle); err != nil {
+		return err
 	}
 
 	hostRoot := strings.TrimSuffix(util.HostRootMount, "/")
@@ -387,9 +372,9 @@ func driverSupportsControllerPublish(ctx context.Context, socketPath string) boo
 	return false
 }
 
-func csiStagingTargetPath(kubeletPodsDir, pvName string) string {
+func csiStagingTargetPath(kubeletPodsDir, volumeName string) string {
 	kubeletRoot := kubeletRootFromPodsDir(kubeletPodsDir)
-	return filepath.Join(kubeletRoot, "plugins", "kubevirt.io", "node-local-hotplug", "staging", pvName)
+	return filepath.Join(kubeletRoot, "plugins", "kubevirt.io", "node-local-hotplug", "staging", volumeName)
 }
 
 // csiNodePluginSocketPath finds the CSI node plugin socket for a driver.
@@ -502,10 +487,15 @@ func newCSIConn(socketPath string) (*grpc.ClientConn, error) {
 // csiControllerPublish calls ControllerPublishVolume directly on the CSI
 // driver's controller socket, bypassing the VolumeAttachment CR and
 // external-attacher sidecar.
-func csiControllerPublish(ctx context.Context, socketPath, nodeName string, info *csiVolumeInfo) (map[string]string, error) {
+func csiControllerPublish(ctx context.Context, nodeName string, info *csiVolumeInfo, hotplugConfig *Config) error {
+	socketPath := hotplugConfig.PersistentRegional.CSISocketPath
+	if socketPath == "" {
+		return fmt.Errorf("csi socket path is not configured in hotplug config")
+	}
+
 	conn, err := newCSIConn(socketPath)
 	if err != nil {
-		return nil, fmt.Errorf("connect to CSI driver %s: %w", info.Driver, err)
+		return fmt.Errorf("connect to CSI driver %s: %w", info.Driver, err)
 	}
 	defer conn.Close()
 
@@ -519,46 +509,59 @@ func csiControllerPublish(ctx context.Context, socketPath, nodeName string, info
 		VolumeContext:    info.VolumeAttributes,
 	}
 
-	resp, err := client.ControllerPublishVolume(ctx, req)
+	_, err = client.ControllerPublishVolume(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("CSI ControllerPublishVolume for %s on node %s: %w", info.VolumeHandle, nodeName, err)
+		if st, ok := status.FromError(err); ok && st.Code() == codes.Unimplemented {
+			log.DefaultLogger().V(3).Infof("CSI ControllerPublishVolume not implemented by driver, skipping for %s on node %s",
+				info.VolumeHandle, nodeName)
+			return nil
+		}
+		return fmt.Errorf("CSI ControllerPublishVolume for %s on node %s: %w", info.VolumeHandle, nodeName, err)
 	}
 
 	log.DefaultLogger().V(3).Infof("CSI ControllerPublishVolume succeeded for %s on node %s (driver=%s)",
 		info.VolumeHandle, nodeName, info.Driver)
 
-	publishInfo := resp.GetPublishContext()
-	return publishInfo, nil
+	return nil
 }
 
 // csiControllerUnpublish calls ControllerUnpublishVolume directly on the CSI
 // driver socket.
-func csiControllerUnpublish(ctx context.Context, socketPath, nodeName string, info *csiVolumeInfo) error {
+func csiControllerUnpublish(ctx context.Context, socketPath, nodeName string, volumeHandle string) error {
 	conn, err := newCSIConn(socketPath)
 	if err != nil {
-		return fmt.Errorf("connect to CSI driver %s: %w", info.Driver, err)
+		return fmt.Errorf("connect to CSI driver: %w", err)
 	}
 	defer conn.Close()
 
 	client := csi.NewControllerClient(conn)
 	req := &csi.ControllerUnpublishVolumeRequest{
-		VolumeId: info.VolumeHandle,
+		VolumeId: volumeHandle,
 		NodeId:   nodeName,
-		Secrets:  info.ControllerPublishSecrets,
 	}
 
 	_, err = client.ControllerUnpublishVolume(ctx, req)
 	if err != nil {
-		return fmt.Errorf("CSI ControllerUnpublishVolume for %s on node %s: %w", info.VolumeHandle, nodeName, err)
+		if st, ok := status.FromError(err); ok && st.Code() == codes.Unimplemented {
+			log.DefaultLogger().V(3).Infof("CSI ControllerUnpublishVolume not implemented by driver, skipping for %s on node %s",
+				volumeHandle, nodeName)
+			return nil
+		}
+		return fmt.Errorf("CSI ControllerUnpublishVolume for %s on node %s: %w", volumeHandle, nodeName, err)
 	}
 
-	log.DefaultLogger().V(3).Infof("CSI ControllerUnpublishVolume succeeded for %s on node %s (driver=%s)",
-		info.VolumeHandle, nodeName, info.Driver)
+	log.DefaultLogger().V(3).Infof("CSI ControllerUnpublishVolume succeeded for %s on node %s",
+		volumeHandle, nodeName)
 	return nil
 }
 
-func csiNodeStage(ctx context.Context, socketPath, kubeletPodsDir string, info *csiVolumeInfo, pvName string) error {
-	stagingPath := csiStagingTargetPath(kubeletPodsDir, pvName)
+func csiNodeStage(ctx context.Context, kubeletPodsDir string, info *csiVolumeInfo, volumeName string, encrypted bool, hotplugConfig *Config) error {
+	socketPath := hotplugConfig.PersistentRegional.CSISocketPath
+	if socketPath == "" {
+		return fmt.Errorf("csi socket path is not configured in hotplug config")
+	}
+
+	stagingPath := csiStagingTargetPath(kubeletPodsDir, volumeName)
 	hostStagingPath := filepath.Join(util.HostRootMount, stagingPath)
 	if err := os.MkdirAll(hostStagingPath, 0750); err != nil {
 		return fmt.Errorf("create staging dir %s: %w", hostStagingPath, err)
@@ -579,6 +582,19 @@ func csiNodeStage(ctx context.Context, socketPath, kubeletPodsDir string, info *
 		Secrets:           info.NodeStageSecrets,
 	}
 
+	if encrypted {
+		if req.VolumeContext == nil {
+			req.VolumeContext = make(map[string]string)
+		}
+		req.VolumeContext["encrypted"] = hotplugConfig.Encryption.EncryptionValue
+		if req.Secrets == nil {
+			req.Secrets = make(map[string]string)
+		}
+		for k, v := range hotplugConfig.Encryption.SecretReq {
+			req.Secrets[k] = v
+		}
+	}
+
 	_, err = client.NodeStageVolume(ctx, req)
 	if err != nil {
 		return fmt.Errorf("CSI NodeStageVolume for %s: %w", info.VolumeHandle, err)
@@ -588,7 +604,12 @@ func csiNodeStage(ctx context.Context, socketPath, kubeletPodsDir string, info *
 	return nil
 }
 
-func csiNodePublish(ctx context.Context, socketPath, kubeletPodsDir string, info *csiVolumeInfo, pvName, targetPath string) error {
+func csiNodePublish(ctx context.Context, kubeletPodsDir string, info *csiVolumeInfo, pvName, targetPath string, hotplugConfig *Config, encrypted bool) error {
+	socketPath := hotplugConfig.PersistentRegional.CSISocketPath
+	if socketPath == "" {
+		return fmt.Errorf("csi socket path is not configured in hotplug config")
+	}
+
 	conn, err := newCSIConn(socketPath)
 	if err != nil {
 		return fmt.Errorf("connect to CSI driver %s: %w", info.Driver, err)
@@ -603,8 +624,14 @@ func csiNodePublish(ctx context.Context, socketPath, kubeletPodsDir string, info
 		TargetPath:        targetPath,
 		VolumeCapability:  buildVolumeCapability(info),
 		VolumeContext:     info.VolumeAttributes,
-		Readonly:          info.ReadOnly,
 		Secrets:           info.NodePublishSecrets,
+	}
+
+	if encrypted {
+		if req.VolumeContext == nil {
+			req.VolumeContext = make(map[string]string)
+		}
+		req.VolumeContext["encrypted"] = hotplugConfig.Encryption.EncryptionValue
 	}
 
 	_, err = client.NodePublishVolume(ctx, req)
@@ -638,51 +665,51 @@ func buildVolumeCapability(info *csiVolumeInfo) *csi.VolumeCapability {
 	}
 }
 
-func csiNodeUnpublish(ctx context.Context, socketPath string, info *csiVolumeInfo, targetPath string) error {
+func csiNodeUnpublish(ctx context.Context, socketPath string, volumeHandle string, targetPath string) error {
 	conn, err := newCSIConn(socketPath)
 	if err != nil {
-		return fmt.Errorf("connect to CSI driver %s: %w", info.Driver, err)
+		return fmt.Errorf("connect to CSI driver: %w", err)
 	}
 	defer conn.Close()
 
 	client := csi.NewNodeClient(conn)
 	req := &csi.NodeUnpublishVolumeRequest{
-		VolumeId:   info.VolumeHandle,
+		VolumeId:   volumeHandle,
 		TargetPath: targetPath,
 	}
 
 	_, err = client.NodeUnpublishVolume(ctx, req)
 	if err != nil {
-		return fmt.Errorf("CSI NodeUnpublishVolume for %s at %s: %w", info.VolumeHandle, targetPath, err)
+		return fmt.Errorf("CSI NodeUnpublishVolume for %s at %s: %w", volumeHandle, targetPath, err)
 	}
 
-	log.DefaultLogger().V(3).Infof("CSI NodeUnpublishVolume succeeded for %s at %s", info.VolumeHandle, targetPath)
+	log.DefaultLogger().V(3).Infof("CSI NodeUnpublishVolume succeeded for %s at %s", volumeHandle, targetPath)
 	return nil
 }
 
-func csiNodeUnstage(ctx context.Context, socketPath, kubeletPodsDir string, info *csiVolumeInfo, pvName string) error {
+func csiNodeUnstage(ctx context.Context, socketPath, kubeletPodsDir string, volumeHandle string, pvName string) error {
 	conn, err := newCSIConn(socketPath)
 	if err != nil {
-		return fmt.Errorf("connect to CSI driver %s: %w", info.Driver, err)
+		return fmt.Errorf("connect to CSI driver: %w", err)
 	}
 	defer conn.Close()
 
 	client := csi.NewNodeClient(conn)
 	stagingPath := csiStagingTargetPath(kubeletPodsDir, pvName)
 	req := &csi.NodeUnstageVolumeRequest{
-		VolumeId:          info.VolumeHandle,
+		VolumeId:          volumeHandle,
 		StagingTargetPath: stagingPath,
 	}
 
 	_, err = client.NodeUnstageVolume(ctx, req)
 	if err != nil {
-		return fmt.Errorf("CSI NodeUnstageVolume for %s: %w", info.VolumeHandle, err)
+		return fmt.Errorf("CSI NodeUnstageVolume for %s: %w", volumeHandle, err)
 	}
 
 	hostStagingPath := filepath.Join(util.HostRootMount, stagingPath)
 	os.RemoveAll(hostStagingPath)
 
-	log.DefaultLogger().V(3).Infof("CSI NodeUnstageVolume succeeded for %s", info.VolumeHandle)
+	log.DefaultLogger().V(3).Infof("CSI NodeUnstageVolume succeeded for %s", volumeHandle)
 	return nil
 }
 

@@ -108,6 +108,8 @@ func (app *SubresourceAPIApp) addVolumeRequestHandler(request *restful.Request, 
 		opts.VolumeSource.DataVolume.Hotpluggable = true
 	} else if opts.VolumeSource.PersistentVolumeClaim != nil {
 		opts.VolumeSource.PersistentVolumeClaim.Hotpluggable = true
+	} else if opts.VolumeSource.CustomVolume != nil {
+		// Custom volumes are implicitly hotpluggable; no flag to set.
 	}
 
 	// inject into VMI if ephemeral, else set as a request on the VM to both make permanent and hotplug.
@@ -336,6 +338,12 @@ func volumeSourceName(volumeSource *v1.HotplugVolumeSource) string {
 	if volumeSource.PersistentVolumeClaim != nil {
 		return volumeSource.PersistentVolumeClaim.ClaimName
 	}
+	if volumeSource.CustomVolume != nil {
+		if volumeSource.CustomVolume.PersistentRegional != nil {
+			return volumeSource.CustomVolume.PersistentRegional.Handle
+		}
+		return ""
+	}
 	return ""
 }
 
@@ -373,7 +381,9 @@ func generateVolumeRequestPatch(prefix string, vmiSpec *v1.VirtualMachineInstanc
 }
 
 func volumeHotpluggable(volume v1.Volume) bool {
-	return (volume.DataVolume != nil && volume.DataVolume.Hotpluggable) || (volume.PersistentVolumeClaim != nil && volume.PersistentVolumeClaim.Hotpluggable)
+	return (volume.DataVolume != nil && volume.DataVolume.Hotpluggable) ||
+		(volume.PersistentVolumeClaim != nil && volume.PersistentVolumeClaim.Hotpluggable) ||
+		volume.CustomVolume != nil
 }
 
 func generateVMVolumeRequestPatch(vm *v1.VirtualMachine, volumeRequest *v1.VirtualMachineVolumeRequest) ([]byte, error) {

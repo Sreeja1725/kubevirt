@@ -785,6 +785,16 @@
         "containerPath": {
           "path": "pathValue",
           "readOnly": true
+        },
+        "customVolume": {
+          "persistentRegional": {
+            "handle": "handleValue",
+            "unencrypted": true,
+            "cluster": "clusterValue"
+          },
+          "ephemeralLocal": {
+            "size": "sizeValue"
+          }
         }
       }
     ],

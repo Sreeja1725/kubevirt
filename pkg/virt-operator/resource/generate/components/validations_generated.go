@@ -8197,6 +8197,44 @@ var CRDsValidation map[string]string = map[string]string{
                         required:
                         - path
                         type: object
+                      customVolume:
+                        description: |-
+                          CustomVolume represents a hotpluggable volume backed by a custom source
+                          (persistent regional CSI volume or on-demand ephemeral image).
+                        properties:
+                          ephemeralLocal:
+                            description: |-
+                              Ephemeral creates a local qcow2 disk image of the given size on the node.
+                              The image is deleted when the volume is detached.
+                            properties:
+                              size:
+                                description: |-
+                                  Size is the capacity of the ephemeral disk as a Kubernetes
+                                  quantity string (e.g. "100Gi", "500Mi").
+                                type: string
+                            required:
+                            - size
+                            type: object
+                          persistentRegional:
+                            description: PersistentRegional references a pre-existing
+                              CSI volume by its handle and driver.
+                            properties:
+                              cluster:
+                                description: Cluster is the name of the cluster that
+                                  the volume is in.
+                                type: string
+                              handle:
+                                description: Handle is the CSI VolumeHandle (e.g.
+                                  "volume_name:volume_uuid").
+                                type: string
+                              unencrypted:
+                                description: Unencrypted indicates the volume should
+                                  not use encryption.
+                                type: boolean
+                            required:
+                            - handle
+                            type: object
+                        type: object
                       dataVolume:
                         description: |-
                           DataVolume represents the dynamic creation a PVC for this volume as well as
@@ -8944,6 +8982,44 @@ var CRDsValidation map[string]string = map[string]string{
                     description: VolumeSource represents the source of the volume
                       to map to the disk.
                     properties:
+                      customVolume:
+                        description: |-
+                          CustomVolume represents a hotpluggable volume backed by a custom source
+                          (persistent regional CSI volume or on-demand ephemeral image).
+                        properties:
+                          ephemeralLocal:
+                            description: |-
+                              Ephemeral creates a local qcow2 disk image of the given size on the node.
+                              The image is deleted when the volume is detached.
+                            properties:
+                              size:
+                                description: |-
+                                  Size is the capacity of the ephemeral disk as a Kubernetes
+                                  quantity string (e.g. "100Gi", "500Mi").
+                                type: string
+                            required:
+                            - size
+                            type: object
+                          persistentRegional:
+                            description: PersistentRegional references a pre-existing
+                              CSI volume by its handle and driver.
+                            properties:
+                              cluster:
+                                description: Cluster is the name of the cluster that
+                                  the volume is in.
+                                type: string
+                              handle:
+                                description: Handle is the CSI VolumeHandle (e.g.
+                                  "volume_name:volume_uuid").
+                                type: string
+                              unencrypted:
+                                description: Unencrypted indicates the volume should
+                                  not use encryption.
+                                type: boolean
+                            required:
+                            - handle
+                            type: object
+                        type: object
                       dataVolume:
                         description: |-
                           DataVolume represents the dynamic creation a PVC for this volume as well as
@@ -14252,6 +14328,43 @@ var CRDsValidation map[string]string = map[string]string{
                       rule: self == true
                 required:
                 - path
+                type: object
+              customVolume:
+                description: |-
+                  CustomVolume represents a hotpluggable volume backed by a custom source
+                  (persistent regional CSI volume or on-demand ephemeral image).
+                properties:
+                  ephemeralLocal:
+                    description: |-
+                      Ephemeral creates a local qcow2 disk image of the given size on the node.
+                      The image is deleted when the volume is detached.
+                    properties:
+                      size:
+                        description: |-
+                          Size is the capacity of the ephemeral disk as a Kubernetes
+                          quantity string (e.g. "100Gi", "500Mi").
+                        type: string
+                    required:
+                    - size
+                    type: object
+                  persistentRegional:
+                    description: PersistentRegional references a pre-existing CSI
+                      volume by its handle and driver.
+                    properties:
+                      cluster:
+                        description: Cluster is the name of the cluster that the volume
+                          is in.
+                        type: string
+                      handle:
+                        description: Handle is the CSI VolumeHandle (e.g. "volume_name:volume_uuid").
+                        type: string
+                      unencrypted:
+                        description: Unencrypted indicates the volume should not use
+                          encryption.
+                        type: boolean
+                    required:
+                    - handle
+                    type: object
                 type: object
               dataVolume:
                 description: |-
@@ -20690,6 +20803,44 @@ var CRDsValidation map[string]string = map[string]string{
                         required:
                         - path
                         type: object
+                      customVolume:
+                        description: |-
+                          CustomVolume represents a hotpluggable volume backed by a custom source
+                          (persistent regional CSI volume or on-demand ephemeral image).
+                        properties:
+                          ephemeralLocal:
+                            description: |-
+                              Ephemeral creates a local qcow2 disk image of the given size on the node.
+                              The image is deleted when the volume is detached.
+                            properties:
+                              size:
+                                description: |-
+                                  Size is the capacity of the ephemeral disk as a Kubernetes
+                                  quantity string (e.g. "100Gi", "500Mi").
+                                type: string
+                            required:
+                            - size
+                            type: object
+                          persistentRegional:
+                            description: PersistentRegional references a pre-existing
+                              CSI volume by its handle and driver.
+                            properties:
+                              cluster:
+                                description: Cluster is the name of the cluster that
+                                  the volume is in.
+                                type: string
+                              handle:
+                                description: Handle is the CSI VolumeHandle (e.g.
+                                  "volume_name:volume_uuid").
+                                type: string
+                              unencrypted:
+                                description: Unencrypted indicates the volume should
+                                  not use encryption.
+                                type: boolean
+                            required:
+                            - handle
+                            type: object
+                        type: object
                       dataVolume:
                         description: |-
                           DataVolume represents the dynamic creation a PVC for this volume as well as
@@ -25807,6 +25958,44 @@ var CRDsValidation map[string]string = map[string]string{
                                       rule: self == true
                                 required:
                                 - path
+                                type: object
+                              customVolume:
+                                description: |-
+                                  CustomVolume represents a hotpluggable volume backed by a custom source
+                                  (persistent regional CSI volume or on-demand ephemeral image).
+                                properties:
+                                  ephemeralLocal:
+                                    description: |-
+                                      Ephemeral creates a local qcow2 disk image of the given size on the node.
+                                      The image is deleted when the volume is detached.
+                                    properties:
+                                      size:
+                                        description: |-
+                                          Size is the capacity of the ephemeral disk as a Kubernetes
+                                          quantity string (e.g. "100Gi", "500Mi").
+                                        type: string
+                                    required:
+                                    - size
+                                    type: object
+                                  persistentRegional:
+                                    description: PersistentRegional references a pre-existing
+                                      CSI volume by its handle and driver.
+                                    properties:
+                                      cluster:
+                                        description: Cluster is the name of the cluster
+                                          that the volume is in.
+                                        type: string
+                                      handle:
+                                        description: Handle is the CSI VolumeHandle
+                                          (e.g. "volume_name:volume_uuid").
+                                        type: string
+                                      unencrypted:
+                                        description: Unencrypted indicates the volume
+                                          should not use encryption.
+                                        type: boolean
+                                    required:
+                                    - handle
+                                    type: object
                                 type: object
                               dataVolume:
                                 description: |-
@@ -31391,6 +31580,45 @@ var CRDsValidation map[string]string = map[string]string{
                                     required:
                                     - path
                                     type: object
+                                  customVolume:
+                                    description: |-
+                                      CustomVolume represents a hotpluggable volume backed by a custom source
+                                      (persistent regional CSI volume or on-demand ephemeral image).
+                                    properties:
+                                      ephemeralLocal:
+                                        description: |-
+                                          Ephemeral creates a local qcow2 disk image of the given size on the node.
+                                          The image is deleted when the volume is detached.
+                                        properties:
+                                          size:
+                                            description: |-
+                                              Size is the capacity of the ephemeral disk as a Kubernetes
+                                              quantity string (e.g. "100Gi", "500Mi").
+                                            type: string
+                                        required:
+                                        - size
+                                        type: object
+                                      persistentRegional:
+                                        description: PersistentRegional references
+                                          a pre-existing CSI volume by its handle
+                                          and driver.
+                                        properties:
+                                          cluster:
+                                            description: Cluster is the name of the
+                                              cluster that the volume is in.
+                                            type: string
+                                          handle:
+                                            description: Handle is the CSI VolumeHandle
+                                              (e.g. "volume_name:volume_uuid").
+                                            type: string
+                                          unencrypted:
+                                            description: Unencrypted indicates the
+                                              volume should not use encryption.
+                                            type: boolean
+                                        required:
+                                        - handle
+                                        type: object
+                                    type: object
                                   dataVolume:
                                     description: |-
                                       DataVolume represents the dynamic creation a PVC for this volume as well as
@@ -32170,6 +32398,45 @@ var CRDsValidation map[string]string = map[string]string{
                                 description: VolumeSource represents the source of
                                   the volume to map to the disk.
                                 properties:
+                                  customVolume:
+                                    description: |-
+                                      CustomVolume represents a hotpluggable volume backed by a custom source
+                                      (persistent regional CSI volume or on-demand ephemeral image).
+                                    properties:
+                                      ephemeralLocal:
+                                        description: |-
+                                          Ephemeral creates a local qcow2 disk image of the given size on the node.
+                                          The image is deleted when the volume is detached.
+                                        properties:
+                                          size:
+                                            description: |-
+                                              Size is the capacity of the ephemeral disk as a Kubernetes
+                                              quantity string (e.g. "100Gi", "500Mi").
+                                            type: string
+                                        required:
+                                        - size
+                                        type: object
+                                      persistentRegional:
+                                        description: PersistentRegional references
+                                          a pre-existing CSI volume by its handle
+                                          and driver.
+                                        properties:
+                                          cluster:
+                                            description: Cluster is the name of the
+                                              cluster that the volume is in.
+                                            type: string
+                                          handle:
+                                            description: Handle is the CSI VolumeHandle
+                                              (e.g. "volume_name:volume_uuid").
+                                            type: string
+                                          unencrypted:
+                                            description: Unencrypted indicates the
+                                              volume should not use encryption.
+                                            type: boolean
+                                        required:
+                                        - handle
+                                        type: object
+                                    type: object
                                   dataVolume:
                                     description: |-
                                       DataVolume represents the dynamic creation a PVC for this volume as well as

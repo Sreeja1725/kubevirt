@@ -32,6 +32,22 @@ message Empty {}
 message HotplugVolumeSourceSpec {
   string pvc_claim_name = 1;
   string data_volume_name = 2;
+  CustomVolumeSourceSpec custom_volume = 3;
+}
+
+message PersistentRegionalSpec {
+  string handle = 1;
+  bool unencrypted = 2;
+  string cluster = 3;
+}
+
+message EphemeralCustomSpec {
+  string size = 1;
+}
+
+message CustomVolumeSourceSpec {
+  PersistentRegionalSpec persistent_regional = 1;
+  EphemeralCustomSpec ephemeral_local = 2;
 }
 
 // disk target
@@ -74,3 +90,4 @@ message RemoveVolumeResponse {
   bool success = 1;
   string message = 2;
 }
+

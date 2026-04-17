@@ -387,6 +387,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"kubevirt.io/api/core/v1.ControllerRevisionRef":                                                   schema_kubevirtio_api_core_v1_ControllerRevisionRef(ref),
 		"kubevirt.io/api/core/v1.CustomBlockSize":                                                         schema_kubevirtio_api_core_v1_CustomBlockSize(ref),
 		"kubevirt.io/api/core/v1.CustomProfile":                                                           schema_kubevirtio_api_core_v1_CustomProfile(ref),
+		"kubevirt.io/api/core/v1.CustomVolumeSource":                                                      schema_kubevirtio_api_core_v1_CustomVolumeSource(ref),
 		"kubevirt.io/api/core/v1.CustomizeComponents":                                                     schema_kubevirtio_api_core_v1_CustomizeComponents(ref),
 		"kubevirt.io/api/core/v1.CustomizeComponentsPatch":                                                schema_kubevirtio_api_core_v1_CustomizeComponentsPatch(ref),
 		"kubevirt.io/api/core/v1.DHCPOptions":                                                             schema_kubevirtio_api_core_v1_DHCPOptions(ref),
@@ -414,6 +415,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"kubevirt.io/api/core/v1.DownwardMetricsVolumeSource":                                             schema_kubevirtio_api_core_v1_DownwardMetricsVolumeSource(ref),
 		"kubevirt.io/api/core/v1.EFI":                                                                     schema_kubevirtio_api_core_v1_EFI(ref),
 		"kubevirt.io/api/core/v1.EmptyDiskSource":                                                         schema_kubevirtio_api_core_v1_EmptyDiskSource(ref),
+		"kubevirt.io/api/core/v1.EphemeralLocalCustomVolumeSource":                                        schema_kubevirtio_api_core_v1_EphemeralLocalCustomVolumeSource(ref),
 		"kubevirt.io/api/core/v1.EphemeralVolumeSource":                                                   schema_kubevirtio_api_core_v1_EphemeralVolumeSource(ref),
 		"kubevirt.io/api/core/v1.EvacuateCancelOptions":                                                   schema_kubevirtio_api_core_v1_EvacuateCancelOptions(ref),
 		"kubevirt.io/api/core/v1.FeatureAPIC":                                                             schema_kubevirtio_api_core_v1_FeatureAPIC(ref),
@@ -499,6 +501,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"kubevirt.io/api/core/v1.PauseOptions":                                                            schema_kubevirtio_api_core_v1_PauseOptions(ref),
 		"kubevirt.io/api/core/v1.PciHostDevice":                                                           schema_kubevirtio_api_core_v1_PciHostDevice(ref),
 		"kubevirt.io/api/core/v1.PermittedHostDevices":                                                    schema_kubevirtio_api_core_v1_PermittedHostDevices(ref),
+		"kubevirt.io/api/core/v1.PersistentRegionalVolumeSource":                                          schema_kubevirtio_api_core_v1_PersistentRegionalVolumeSource(ref),
 		"kubevirt.io/api/core/v1.PersistentVolumeClaimInfo":                                               schema_kubevirtio_api_core_v1_PersistentVolumeClaimInfo(ref),
 		"kubevirt.io/api/core/v1.PersistentVolumeClaimVolumeSource":                                       schema_kubevirtio_api_core_v1_PersistentVolumeClaimVolumeSource(ref),
 		"kubevirt.io/api/core/v1.PluginBinding":                                                           schema_kubevirtio_api_core_v1_PluginBinding(ref),
@@ -19812,6 +19815,33 @@ func schema_kubevirtio_api_core_v1_CustomProfile(ref common.ReferenceCallback) c
 	}
 }
 
+func schema_kubevirtio_api_core_v1_CustomVolumeSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "CustomVolumeSource represents a volume source for node-local hotplug that does not use a standard PVC or DataVolume. Exactly one sub-type must be specified.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"persistentRegional": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PersistentRegional references a pre-existing CSI volume by its handle and driver.",
+							Ref:         ref("kubevirt.io/api/core/v1.PersistentRegionalVolumeSource"),
+						},
+					},
+					"ephemeralLocal": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ephemeral creates a local qcow2 disk image of the given size on the node. The image is deleted when the volume is detached.",
+							Ref:         ref("kubevirt.io/api/core/v1.EphemeralLocalCustomVolumeSource"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"kubevirt.io/api/core/v1.EphemeralLocalCustomVolumeSource", "kubevirt.io/api/core/v1.PersistentRegionalVolumeSource"},
+	}
+}
+
 func schema_kubevirtio_api_core_v1_CustomizeComponents(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -20974,6 +21004,28 @@ func schema_kubevirtio_api_core_v1_EmptyDiskSource(ref common.ReferenceCallback)
 	}
 }
 
+func schema_kubevirtio_api_core_v1_EphemeralLocalCustomVolumeSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "EphemeralLocalCustomVolumeSource creates a local qcow2 image on the node.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"size": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Size is the capacity of the ephemeral disk as a Kubernetes quantity string (e.g. \"100Gi\", \"500Mi\").",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"size"},
+			},
+		},
+	}
+}
+
 func schema_kubevirtio_api_core_v1_EphemeralVolumeSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -21817,11 +21869,17 @@ func schema_kubevirtio_api_core_v1_HotplugVolumeSource(ref common.ReferenceCallb
 							Ref:         ref("kubevirt.io/api/core/v1.DataVolumeSource"),
 						},
 					},
+					"customVolume": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CustomVolume represents a hotpluggable volume backed by a custom source (persistent regional CSI volume or on-demand ephemeral image).",
+							Ref:         ref("kubevirt.io/api/core/v1.CustomVolumeSource"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"kubevirt.io/api/core/v1.DataVolumeSource", "kubevirt.io/api/core/v1.PersistentVolumeClaimVolumeSource"},
+			"kubevirt.io/api/core/v1.CustomVolumeSource", "kubevirt.io/api/core/v1.DataVolumeSource", "kubevirt.io/api/core/v1.PersistentVolumeClaimVolumeSource"},
 	}
 }
 
@@ -24648,6 +24706,42 @@ func schema_kubevirtio_api_core_v1_PermittedHostDevices(ref common.ReferenceCall
 		},
 		Dependencies: []string{
 			"kubevirt.io/api/core/v1.MediatedHostDevice", "kubevirt.io/api/core/v1.PciHostDevice", "kubevirt.io/api/core/v1.USBHostDevice"},
+	}
+}
+
+func schema_kubevirtio_api_core_v1_PersistentRegionalVolumeSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PersistentRegionalVolumeSource identifies a CSI volume by its handle and driver name, bypassing PVC/PV resolution.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"handle": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Handle is the CSI VolumeHandle (e.g. \"volume_name:volume_uuid\").",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"unencrypted": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Unencrypted indicates the volume should not use encryption.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"cluster": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Cluster is the name of the cluster that the volume is in.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"handle"},
+			},
+		},
 	}
 }
 
@@ -30003,12 +30097,18 @@ func schema_kubevirtio_api_core_v1_Volume(ref common.ReferenceCallback) common.O
 							Ref:         ref("kubevirt.io/api/core/v1.ContainerPathVolumeSource"),
 						},
 					},
+					"customVolume": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CustomVolume represents a hotpluggable volume backed by a custom source (persistent regional CSI volume or on-demand ephemeral image).",
+							Ref:         ref("kubevirt.io/api/core/v1.CustomVolumeSource"),
+						},
+					},
 				},
 				Required: []string{"name"},
 			},
 		},
 		Dependencies: []string{
-			"kubevirt.io/api/core/v1.CloudInitConfigDriveSource", "kubevirt.io/api/core/v1.CloudInitNoCloudSource", "kubevirt.io/api/core/v1.ConfigMapVolumeSource", "kubevirt.io/api/core/v1.ContainerDiskSource", "kubevirt.io/api/core/v1.ContainerPathVolumeSource", "kubevirt.io/api/core/v1.DataVolumeSource", "kubevirt.io/api/core/v1.DownwardAPIVolumeSource", "kubevirt.io/api/core/v1.DownwardMetricsVolumeSource", "kubevirt.io/api/core/v1.EmptyDiskSource", "kubevirt.io/api/core/v1.EphemeralVolumeSource", "kubevirt.io/api/core/v1.HostDisk", "kubevirt.io/api/core/v1.MemoryDumpVolumeSource", "kubevirt.io/api/core/v1.PersistentVolumeClaimVolumeSource", "kubevirt.io/api/core/v1.SecretVolumeSource", "kubevirt.io/api/core/v1.ServiceAccountVolumeSource", "kubevirt.io/api/core/v1.SysprepSource"},
+			"kubevirt.io/api/core/v1.CloudInitConfigDriveSource", "kubevirt.io/api/core/v1.CloudInitNoCloudSource", "kubevirt.io/api/core/v1.ConfigMapVolumeSource", "kubevirt.io/api/core/v1.ContainerDiskSource", "kubevirt.io/api/core/v1.ContainerPathVolumeSource", "kubevirt.io/api/core/v1.CustomVolumeSource", "kubevirt.io/api/core/v1.DataVolumeSource", "kubevirt.io/api/core/v1.DownwardAPIVolumeSource", "kubevirt.io/api/core/v1.DownwardMetricsVolumeSource", "kubevirt.io/api/core/v1.EmptyDiskSource", "kubevirt.io/api/core/v1.EphemeralVolumeSource", "kubevirt.io/api/core/v1.HostDisk", "kubevirt.io/api/core/v1.MemoryDumpVolumeSource", "kubevirt.io/api/core/v1.PersistentVolumeClaimVolumeSource", "kubevirt.io/api/core/v1.SecretVolumeSource", "kubevirt.io/api/core/v1.ServiceAccountVolumeSource", "kubevirt.io/api/core/v1.SysprepSource"},
 	}
 }
 
@@ -30184,11 +30284,17 @@ func schema_kubevirtio_api_core_v1_VolumeSource(ref common.ReferenceCallback) co
 							Ref:         ref("kubevirt.io/api/core/v1.ContainerPathVolumeSource"),
 						},
 					},
+					"customVolume": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CustomVolume represents a hotpluggable volume backed by a custom source (persistent regional CSI volume or on-demand ephemeral image).",
+							Ref:         ref("kubevirt.io/api/core/v1.CustomVolumeSource"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"kubevirt.io/api/core/v1.CloudInitConfigDriveSource", "kubevirt.io/api/core/v1.CloudInitNoCloudSource", "kubevirt.io/api/core/v1.ConfigMapVolumeSource", "kubevirt.io/api/core/v1.ContainerDiskSource", "kubevirt.io/api/core/v1.ContainerPathVolumeSource", "kubevirt.io/api/core/v1.DataVolumeSource", "kubevirt.io/api/core/v1.DownwardAPIVolumeSource", "kubevirt.io/api/core/v1.DownwardMetricsVolumeSource", "kubevirt.io/api/core/v1.EmptyDiskSource", "kubevirt.io/api/core/v1.EphemeralVolumeSource", "kubevirt.io/api/core/v1.HostDisk", "kubevirt.io/api/core/v1.MemoryDumpVolumeSource", "kubevirt.io/api/core/v1.PersistentVolumeClaimVolumeSource", "kubevirt.io/api/core/v1.SecretVolumeSource", "kubevirt.io/api/core/v1.ServiceAccountVolumeSource", "kubevirt.io/api/core/v1.SysprepSource"},
+			"kubevirt.io/api/core/v1.CloudInitConfigDriveSource", "kubevirt.io/api/core/v1.CloudInitNoCloudSource", "kubevirt.io/api/core/v1.ConfigMapVolumeSource", "kubevirt.io/api/core/v1.ContainerDiskSource", "kubevirt.io/api/core/v1.ContainerPathVolumeSource", "kubevirt.io/api/core/v1.CustomVolumeSource", "kubevirt.io/api/core/v1.DataVolumeSource", "kubevirt.io/api/core/v1.DownwardAPIVolumeSource", "kubevirt.io/api/core/v1.DownwardMetricsVolumeSource", "kubevirt.io/api/core/v1.EmptyDiskSource", "kubevirt.io/api/core/v1.EphemeralVolumeSource", "kubevirt.io/api/core/v1.HostDisk", "kubevirt.io/api/core/v1.MemoryDumpVolumeSource", "kubevirt.io/api/core/v1.PersistentVolumeClaimVolumeSource", "kubevirt.io/api/core/v1.SecretVolumeSource", "kubevirt.io/api/core/v1.ServiceAccountVolumeSource", "kubevirt.io/api/core/v1.SysprepSource"},
 	}
 }
 

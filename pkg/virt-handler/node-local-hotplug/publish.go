@@ -32,6 +32,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	v1 "kubevirt.io/api/core/v1"
+	"kubevirt.io/client-go/log"
 
 	diskutils "kubevirt.io/kubevirt/pkg/ephemeral-disk-utils"
 	hotplugdisk "kubevirt.io/kubevirt/pkg/hotplug-disk"
@@ -239,7 +240,43 @@ func publishDir(targetBase *safepath.Path, volumeName, sourcePath string) error 
 	if out, err := virt_chroot.MountChroot(src, target, false).CombinedOutput(); err != nil {
 		return fmt.Errorf("bind-mount dir: %s: %w", string(out), err)
 	}
+	if err := relabelToMatch(targetBase, target); err != nil {
+		log.DefaultLogger().Warningf("SELinux relabel for %s: %v", volumeName, err)
+	}
 	return diskutils.DefaultOwnershipManager.SetFileOwnership(target)
+}
+
+const xattrNameSELinux = "security.selinux"
+
+// relabelToMatch reads the SELinux label from refPath and applies it to target.
+// This is necessary because bind-mounts preserve the source's SELinux context,
+// which may lack the MCS categories required by the virt-launcher container.
+func relabelToMatch(refPath, target *safepath.Path) error {
+	refLabel, err := safepath.GetxattrNoFollow(refPath, xattrNameSELinux)
+	if err != nil {
+		return fmt.Errorf("get SELinux label from reference: %w", err)
+	}
+	label := strings.TrimRight(string(refLabel), "\x00")
+	if label == "" {
+		return nil
+	}
+
+	fd, err := safepath.OpenAtNoFollow(target)
+	if err != nil {
+		return fmt.Errorf("open target for relabel: %w", err)
+	}
+	defer fd.Close()
+
+	f, err := os.OpenFile(fd.SafePath(), os.O_RDONLY, 0)
+	if err != nil {
+		return fmt.Errorf("reopen fd for relabel: %w", err)
+	}
+	defer f.Close()
+
+	if err := unix.Fsetxattr(int(f.Fd()), xattrNameSELinux, []byte(label), 0); err != nil {
+		return fmt.Errorf("fsetxattr SELinux label %q: %w", label, err)
+	}
+	return nil
 }
 
 // resolveSourceSafepath converts an absolute source path into a safepath.Path.
@@ -305,5 +342,28 @@ func cleanupFromLauncher(vmi *v1.VirtualMachineInstance, host, kubeletPodsDir, v
 		return true, nil
 	}
 	return false, nil
+}
+
+// should be in format single-zone-cluster:<volume_name>:<volume_uuid>:<attach_ref_id>
+// allowed handle formats are:
+// <cluster>:<volume_name>:<volume_uuid>:<attach_ref_id>
+// <volume_name>:<volume_uuid>:<attach_ref_id>
+// <volume_name>:<volume_uuid>
+func makeHandle(handle, cluster, namespace string) string {
+	if cluster == "" {
+		cluster = "single-zone-cluster"
+	}
+
+	splitted := strings.Split(handle, ":")
+	switch len(splitted) {
+	case 4:
+		return handle
+	case 3:
+		return fmt.Sprintf("%s:%s", cluster, handle)
+	case 2:
+		return fmt.Sprintf("%s:%s:%s", cluster, handle, namespace)
+	default:
+		return handle
+	}
 }
 

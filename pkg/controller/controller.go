@@ -284,6 +284,8 @@ func ApplyVolumeRequestOnVMISpec(vmiSpec *v1.VirtualMachineInstanceSpec, request
 				dvSource := request.AddVolumeOptions.VolumeSource.DataVolume.DeepCopy()
 				dvSource.Hotpluggable = true
 				newVolume.VolumeSource.DataVolume = dvSource
+			} else if request.AddVolumeOptions.VolumeSource.CustomVolume != nil {
+				newVolume.VolumeSource.CustomVolume = request.AddVolumeOptions.VolumeSource.CustomVolume.DeepCopy()
 			}
 
 			vmiSpec.Volumes = append(vmiSpec.Volumes, newVolume)
