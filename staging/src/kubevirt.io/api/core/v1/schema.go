@@ -1001,7 +1001,24 @@ type VolumeSource struct {
 	// The path must correspond to an existing volumeMount in the compute container.
 	// +optional
 	ContainerPath *ContainerPathVolumeSource `json:"containerPath,omitempty"`
+	// NodeLocalDevice references a host-local block device or file that virt-handler
+	// has bind-mounted into the launcher pod's hotplug-disks directory. Only valid for
+	// hotplug volumes managed by the virt-handler node-local hotplug API.
+	// +optional
+	NodeLocalDevice *NodeLocalDeviceSource `json:"nodeLocalDevice,omitempty"`
 }
+
+type NodeLocalDeviceSource struct {
+	Format NodeLocalDeviceFormat `json:"format"`
+	Path   string                `json:"path,omitempty"`
+}
+
+type NodeLocalDeviceFormat string
+
+const (
+	NodeLocalDeviceFormatBlock NodeLocalDeviceFormat = "block"
+	NodeLocalDeviceFormatFile  NodeLocalDeviceFormat = "file"
+)
 
 // HotplugVolumeSource Represents the source of a volume to mount which are capable
 // of being hotplugged on a live running VMI.

@@ -182,12 +182,15 @@ func verifyHotplugVolumes(newHotplugVolumeMap, oldHotplugVolumeMap map[string]v1
 				}
 			}
 		} else {
-			// This is a new volume, ensure that the volume is either DV, PVC or memoryDumpVolume
-			if v.DataVolume == nil && v.PersistentVolumeClaim == nil && v.MemoryDump == nil {
+			// This is a new volume; ensure the source is one of the
+			// supported hotplug sources: PVC, DataVolume, MemoryDump, or
+			// NodeLocalDevice (added by virt-handler's node-local
+			// hotplug API after the device has been staged on the node).
+			if !isAllowedHotplugSource(&v) {
 				return webhookutils.ToAdmissionResponse([]metav1.StatusCause{
 					{
 						Type:    metav1.CauseTypeFieldValueInvalid,
-						Message: fmt.Sprintf("volume %s is not a PVC or DataVolume", k),
+						Message: fmt.Sprintf("volume %s is not a PVC, DataVolume, MemoryDump, or NodeLocalDevice", k),
 					},
 				})
 			}
@@ -220,6 +223,22 @@ func isMigratedVolume(newVol, oldVol *v1.Volume, migratedVolumeMap map[string]bo
 	}
 	_, ok := migratedVolumeMap[newVol.Name]
 	return ok
+}
+
+// isAllowedHotplugSource reports whether vol carries one of the volume
+// sources kubevirt accepts as a hotplug-time addition to a running VMI.
+// NodeLocalDevice is included because virt-handler's node-local hotplug
+// gRPC service patches the VMI spec on behalf of the caller after the
+// host-side staging is in place; from the apiserver's perspective the
+// volume appears as a brand-new hotplug entry.
+func isAllowedHotplugSource(vol *v1.Volume) bool {
+	if vol == nil {
+		return false
+	}
+	return vol.PersistentVolumeClaim != nil ||
+		vol.DataVolume != nil ||
+		vol.MemoryDump != nil ||
+		vol.NodeLocalDevice != nil
 }
 
 func verifyPermanentVolumes(newPermanentVolumeMap, oldPermanentVolumeMap map[string]v1.Volume, newDisks, oldDisks map[string]v1.Disk, migratedVolumeMap map[string]bool) *admissionv1.AdmissionResponse {

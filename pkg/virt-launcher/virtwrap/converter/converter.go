@@ -610,7 +610,16 @@ func Convert_v1_Volume_To_api_Disk(source *v1.Volume, disk *api.Disk, c *convert
 	if source.DownwardMetrics != nil {
 		return Convert_v1_DownwardMetricSource_To_api_Disk(disk, c)
 	}
-
+	if source.NodeLocalDevice != nil {
+		switch source.NodeLocalDevice.Format {
+		case v1.NodeLocalDeviceFormatBlock:
+			return Convert_v1_Hotplug_BlockVolumeSource_To_api_Disk(source.Name, disk, c.VolumesDiscardIgnore)
+		case v1.NodeLocalDeviceFormatFile:
+			return Convert_v1_Hotplug_FilesystemVolumeSource_To_api_Disk(source.Name, disk, c.VolumesDiscardIgnore)
+		default:
+			return fmt.Errorf("hotplug disk %s has node-local device with unsupported format %q", disk.Alias.GetName(), source.NodeLocalDevice.Format)
+		}
+	}
 	return fmt.Errorf("disk %s references an unsupported source", disk.Alias.GetName())
 }
 
@@ -628,6 +637,16 @@ func Convert_v1_Hotplug_Volume_To_api_Disk(source *v1.Volume, disk *api.Disk, c 
 
 	if source.DataVolume != nil {
 		return Convert_v1_Hotplug_DataVolume_To_api_Disk(source.Name, disk, c)
+	}
+	if source.NodeLocalDevice != nil {
+		switch source.NodeLocalDevice.Format {
+		case v1.NodeLocalDeviceFormatBlock:
+			return Convert_v1_Hotplug_BlockVolumeSource_To_api_Disk(source.Name, disk, c.VolumesDiscardIgnore)
+		case v1.NodeLocalDeviceFormatFile:
+			return Convert_v1_Hotplug_FilesystemVolumeSource_To_api_Disk(source.Name, disk, c.VolumesDiscardIgnore)
+		default:
+			return fmt.Errorf("hotplug disk %s has node-local device with unsupported format %q", disk.Alias.GetName(), source.NodeLocalDevice.Format)
+		}
 	}
 	return fmt.Errorf("hotplug disk %s references an unsupported source", disk.Alias.GetName())
 }

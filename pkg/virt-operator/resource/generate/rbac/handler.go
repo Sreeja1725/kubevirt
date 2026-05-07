@@ -77,8 +77,19 @@ func newHandlerClusterRole() *rbacv1.ClusterRole {
 				Resources: []string{
 					"virtualmachineinstances",
 				},
+				// "patch" + "get" are required by the node-local-
+				// hotplug gRPC service: AttachDevice / DetachDevice
+				// issue a JSONPatch against the VMI
+				// (spec.volumes, spec.domain.devices.disks and
+				// status.volumeStatus in a single payload, gated by
+				// JSONPatch "test" ops) and re-GET the VMI before
+				// retrying on a resourceVersion conflict or a
+				// "test" miss. Patching all three slices through
+				// the main resource works because the VMI CRD does
+				// not enable the /status subresource (see
+				// NewVirtualMachineInstanceCrd).
 				Verbs: []string{
-					"update", "list", "watch",
+					"get", "update", "patch", "list", "watch",
 				},
 			},
 			{

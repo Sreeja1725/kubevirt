@@ -36,8 +36,11 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"libvirt.org/go/libvirtxml"
 
+	"kubevirt.io/kubevirt/pkg/hypervisor"
 	netresources "kubevirt.io/kubevirt/pkg/network/resources"
+	"kubevirt.io/kubevirt/pkg/virt-handler/cgroup"
 	"kubevirt.io/kubevirt/pkg/virt-handler/ksm"
+	nodelocalhotplug "kubevirt.io/kubevirt/pkg/virt-handler/node-local-hotplug"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -473,6 +476,46 @@ func (app *virtHandlerApp) Run() {
 	go app.servercertmanager.Start()
 	go app.migrationCertManager.Start()
 	go app.vsockClientCertManager.Start()
+
+	// Build the cgroup-manager closure once and let the mounter call it
+	// per attach/detach. AllowEmulation is read from clusterConfig at
+	// call time so dynamic cluster-level toggles are respected without
+	// having to rebuild the mounter. The hypervisor-device name is
+	// resolved from the cluster's configured hypervisor (kvm, mshv, ...);
+	// passing "" would make cgroup/util.go format "/dev/" and fail in
+	// safepath.JoinNoFollow.
+	hypervisorNodeInfo := hypervisor.NewHypervisorNodeInformation(app.clusterConfig.GetHypervisor().Name)
+	nodeLocalCgroupProvider := func(vmi *v1.VirtualMachineInstance) (cgroup.Manager, error) {
+		return cgroup.NewManagerFromVM(
+			vmi,
+			app.HostOverride,
+			hypervisorNodeInfo.GetHypervisorDevice(),
+			app.clusterConfig.AllowEmulation(),
+		)
+	}
+	nodeLocalMounter := nodelocalhotplug.NewMounter(app.KubeletPodsDir, app.HostOverride, nodeLocalCgroupProvider)
+	nodeLocalSvc := nodelocalhotplug.NewService(
+		vmiSourceInformer.GetStore(),
+		domainSharedInformer.GetStore(),
+		app.virtCli,
+		nodeLocalMounter,
+		recorder,
+		app.HostOverride,
+	)
+	go func() {
+		// Re-assert host-side mounts for any NodeLocalDevice volumes
+		// already in spec on this node before the gRPC server starts
+		// accepting attach/detach calls. The informer cache has
+		// already synced above (cache.WaitForCacheSync). The recovery
+		// pass is bounded so it cannot indefinitely delay serving.
+		recoverCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		nodeLocalSvc.Recover(recoverCtx)
+		cancel()
+
+		if err := nodelocalhotplug.RunServer(nodelocalhotplug.DefaultSocketPath, stop, nodeLocalSvc); err != nil {
+			log.Log.Reason(err).Errorf("node-local-hotplug server exited with error")
+		}
+	}()
 
 	se, exists, err := selinux.NewSELinux()
 	if err == nil && exists {

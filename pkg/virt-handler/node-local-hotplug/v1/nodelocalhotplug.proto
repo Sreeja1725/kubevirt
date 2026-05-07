@@ -1,0 +1,221 @@
+syntax = "proto3";
+
+package kubevirt.nodelocalhotplug.v1;
+
+option go_package = "v1";
+
+// NodeLocalHotplug is a node-local gRPC service exposed by virt-handler
+// over a unix domain socket. It is the on-node API responsible for the
+// "attach" and "detach" phases of the three-phase hotplug model:
+//
+//   Phase 1 - Volume delivery
+//     A pluggable, source-specific component makes a disk available on
+//     the node as an absolute host path. Examples:
+//       * raw host block device or file (no-op delivery; admin staged it)
+//       * an attachment pod created for a PVC or DataVolume, exposing the
+//         volume under /var/lib/kubelet/pods/<pod-uid>/...
+//       * a CSI driver NodeStage path
+//       * a hostPath / local PV path
+//     Delivery components MUST NOT patch vmi.Spec.Volumes; that is the
+//     responsibility of phase 2.
+//
+//   Phase 2 - Attach (this service, AttachDevice RPC)
+//     Given a host path + format, virt-handler:
+//       * mknod's a block device (or bind-mounts a regular file) into the
+//         virt-launcher pod's hotplug-disks directory,
+//       * patches vmi.Spec.Volumes with a NodeLocalDevice volume entry
+//         and a matching disk on vmi.Spec.Domain.Devices.Disks,
+//       * patches vmi.Status.VolumeStatus to reflect HotplugVolumeMounted.
+//     virt-handler's existing VirtualMachineController reconcile observes
+//     the spec change and drives the libvirt AttachDeviceFlags. The
+//     status transitions to VolumeReady when the domain target appears.
+//
+//   Phase 3 - Detach (this service, DetachDevice RPC)
+//     Removes the volume from spec, waits for the standard reconcile to
+//     drop the disk from libvirt, then unmounts the host bind / removes
+//     the cgroup allow rule. The Phase 1 delivery component is then
+//     free to tear down its delivery (e.g. delete the attachment pod).
+//
+// Both RPCs MUST be idempotent: invoking AttachDevice with the same
+// (namespace, name, volume_name) on a volume that is already attached
+// is a successful no-op, and DetachDevice on a volume that is not
+// currently attached is likewise a successful no-op.
+//
+// Blocking semantics (asymmetric on purpose):
+//   * AttachDevice returns as soon as the host-side staging is in place
+//     and the VMI spec/status update has been accepted. The libvirt
+//     AttachDeviceFlags happens asynchronously in virt-handler's normal
+//     reconcile. Callers wanting end-to-end synchronous semantics
+//     should watch vmi.Status.VolumeStatus[volume_name] for VolumeReady
+//     (success) or a non-empty Reason/Message (libvirt-side failure).
+//     Failures from this RPC are also emitted as a Warning Event with
+//     reason "NodeLocalHotplugAttachFailed" on the VMI.
+//   * DetachDevice blocks until the local libvirt domain has dropped
+//     the disk (bounded by an internal timeout) before unmounting the
+//     host bind-mount. The caller therefore gets a fully synchronous
+//     outcome on Detach: either Success means the disk is gone from
+//     the guest AND the host stage is unmounted, or a hard failure is
+//     returned (e.g. libvirt-detach timeout). Failures are mirrored
+//     onto the VMI as a Warning Event with reason
+//     "NodeLocalHotplugDetachFailed".
+//
+// On success both RPCs emit a Normal Event ("NodeLocalHotplugAttached"
+// / "NodeLocalHotplugDetached") on the VMI for observability.
+//
+// The service is intentionally NOT part of the
+// virt-handler<->virt-launcher contract; it is a virt-handler local API.
+service NodeLocalHotplug {
+  rpc AttachDevice(AttachDeviceRequest) returns (AttachDeviceResponse) {}
+  rpc DetachDevice(DetachDeviceRequest) returns (DetachDeviceResponse) {}
+}
+
+// NodeLocalHotplugErrorCode is a machine-readable classification of
+// failures returned by AttachDevice / DetachDevice. Callers SHOULD
+// branch on this code (retry vs surface to user vs give up) instead
+// of pattern-matching the human-readable message field.
+enum NodeLocalHotplugErrorCode {
+  // OK is the success code; pairs with response.success = true.
+  NODE_LOCAL_HOTPLUG_OK = 0;
+
+  // The request itself is malformed (missing fields, invalid format,
+  // unsupported enum value, ...). Retrying with the same payload will
+  // not help.
+  NODE_LOCAL_HOTPLUG_INVALID_REQUEST = 1;
+
+  // The named VMI does not exist on this node's informer cache.
+  // Retry only after confirming the VMI was scheduled here.
+  NODE_LOCAL_HOTPLUG_VMI_NOT_FOUND = 2;
+
+  // vmi_uid was supplied and did not match the cached VMI's UID
+  // (stale request after VMI re-creation under the same name).
+  NODE_LOCAL_HOTPLUG_VMI_UID_MISMATCH = 3;
+
+  // The VMI is not in a phase where hotplug is permitted (typically
+  // not Running, or migration-in-progress).
+  NODE_LOCAL_HOTPLUG_VMI_NOT_RUNNING = 4;
+
+  // The supplied host path failed validation (does not exist, wrong
+  // type for the declared format, outside an allowed root, etc.).
+  NODE_LOCAL_HOTPLUG_HOST_PATH_INVALID = 5;
+
+  // The volume_name is already present on the VMI with a different
+  // shape (different path, format, or readonly). The caller must
+  // detach first.
+  NODE_LOCAL_HOTPLUG_VOLUME_CONFLICT = 6;
+
+  // mknod / bind-mount into the launcher pod failed.
+  NODE_LOCAL_HOTPLUG_MOUNT_FAILED = 7;
+
+  // The JSONPatch against the apiserver failed for a non-retriable
+  // reason (admission rejection, schema invalid, ...). Retriable
+  // patch failures (resourceVersion conflict, JSONPatch "test" op
+  // miss) are handled internally by the server and not surfaced.
+  NODE_LOCAL_HOTPLUG_PATCH_FAILED = 8;
+
+  // DetachDevice waited for the libvirt domain to drop the disk and
+  // timed out. Caller may safely retry; the spec change has already
+  // been applied so the next reconcile will continue driving detach.
+  NODE_LOCAL_HOTPLUG_LIBVIRT_TIMEOUT = 9;
+
+  // Catch-all for unexpected server-side errors. Always retriable
+  // from the caller's point of view (no contract is broken).
+  NODE_LOCAL_HOTPLUG_INTERNAL = 99;
+}
+
+// DeviceFormat tells virt-handler how to interpret the host path provided
+// by the caller and how to translate it into a libvirt disk source.
+enum DeviceFormat {
+  DEVICE_FORMAT_UNSPECIFIED = 0;
+  // Host path is a block device. Translates to <disk type='block'>.
+  DEVICE_FORMAT_BLOCK = 1;
+  // Host path is a regular file. Translates to <disk type='file'>.
+  DEVICE_FORMAT_FILE = 2;
+}
+
+// TargetBus selects the libvirt <target bus='...'/> attribute on the
+// generated disk. Defaults to VIRTIO when left UNSPECIFIED.
+enum TargetBus {
+  TARGET_BUS_UNSPECIFIED = 0;
+  TARGET_BUS_VIRTIO = 1;
+  TARGET_BUS_SCSI = 2;
+}
+
+// Device describes a single host-side resource to expose to a VMI as a
+// hotplug disk.
+message Device {
+  // Absolute host path to the device or file to attach.
+  string device_path = 1;
+  // How to interpret device_path (block device vs regular file).
+  DeviceFormat format = 2;
+  // Optional libvirt target bus. Defaults to VIRTIO when unspecified.
+  TargetBus target_bus = 3;
+  // Optional libvirt disk serial.
+  string serial = 4;
+  // Optional: attach as read-only.
+  bool readonly = 6;
+}
+
+// AttachDeviceRequest asks virt-handler to make a host-side device
+// visible to a running VMI as a hotplug disk.
+message AttachDeviceRequest {
+  // Namespace + name identify the running VMI on this node.
+  string namespace = 1;
+  string name = 2;
+  // Optional: when set, must equal the VMI's UID; protects against
+  // races with VMI re-creation under the same name. Leave empty to
+  // skip the fence (e.g. for ad-hoc CLI use).
+  string vmi_uid = 3;
+  // Logical name of the volume inside the VMI. Must be a valid
+  // DNS-1123 label and unique within the VMI. Used as the basename
+  // under the launcher pod's hotplug-disks staging directory.
+  string volume_name = 4;
+  // Host-side device to attach.
+  Device device = 5;
+}
+
+// AttachDeviceResponse reports the outcome of an AttachDevice call.
+//
+// success and code are equivalent: success == (code == NODE_LOCAL_HOTPLUG_OK).
+// Both are present so simple callers can ignore code while richer
+// callers (CSI sidecars, retry-aware CLIs) can branch on it.
+message AttachDeviceResponse {
+  // True when the volume is observably present in vmi.Spec.Volumes and
+  // the launcher-side staging has been performed (or was already in
+  // place). False with a non-empty message indicates a hard failure.
+  bool success = 1;
+  // Human-readable description. Stable enough to log but not a
+  // contract for programmatic parsing; use code for that.
+  string message = 2;
+  // Structured failure classification. NODE_LOCAL_HOTPLUG_OK on success.
+  NodeLocalHotplugErrorCode code = 3;
+}
+
+// DetachDeviceRequest asks virt-handler to remove a previously attached
+// hotplug volume from a running VMI.
+message DetachDeviceRequest {
+  // Namespace + name identify the running VMI on this node.
+  string namespace = 1;
+  string name = 2;
+  // Optional: when set, must equal the VMI's UID; protects against
+  // races with VMI re-creation under the same name. Leave empty to
+  // skip the fence (e.g. for ad-hoc CLI use).
+  string vmi_uid = 3;
+  // Logical name of the volume inside the VMI to detach. Must match
+  // the name supplied to AttachDevice.
+  string volume_name = 4;
+}
+
+// DetachDeviceResponse reports the outcome of a DetachDevice call.
+//
+// success == (code == NODE_LOCAL_HOTPLUG_OK); see AttachDeviceResponse
+// for rationale.
+message DetachDeviceResponse {
+  // True when the volume is observably removed from vmi.Spec.Volumes,
+  // libvirt has dropped the disk from the running domain, and the
+  // launcher-side staging has been torn down (or was never present).
+  // False with a non-empty message indicates a hard failure.
+  bool success = 1;
+  string message = 2;
+  // Structured failure classification. NODE_LOCAL_HOTPLUG_OK on success.
+  NodeLocalHotplugErrorCode code = 3;
+}

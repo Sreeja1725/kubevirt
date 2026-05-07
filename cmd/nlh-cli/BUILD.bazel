@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["nlh-cli.go"],
+    importpath = "kubevirt.io/kubevirt/cmd/nlh-cli",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//pkg/virt-handler/node-local-hotplug/v1:go_default_library",
+        "//vendor/google.golang.org/grpc:go_default_library",
+        "//vendor/google.golang.org/grpc/credentials/insecure:go_default_library",
+    ],
+)
+
+go_binary(
+    name = "nlh-cli",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+)
