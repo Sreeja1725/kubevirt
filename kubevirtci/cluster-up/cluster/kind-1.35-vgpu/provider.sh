@@ -112,6 +112,8 @@ function cleanup_fake_vgpu() {
 function _add_mdev_mounts() {
     # Add mdev_bus mount for fake vGPU support
     # Note: The fake vGPU module creates devices under /sys/devices/virtual/nvidia/
+    # /dev/vfio and /sys/kernel/iommu_groups are required for VFIO passthrough of
+    # the mdev to virt-launcher (and to any DRA-driven consumer).
     cat <<EOF >> ${KUBEVIRTCI_CONFIG_PATH}/$KUBEVIRT_PROVIDER/kind.yaml
   - containerPath: /sys/class/mdev_bus
     hostPath: /sys/class/mdev_bus
@@ -119,6 +121,10 @@ function _add_mdev_mounts() {
     hostPath: /sys/bus/mdev
   - containerPath: /sys/devices/virtual/nvidia
     hostPath: /sys/devices/virtual/nvidia
+  - containerPath: /sys/kernel/iommu_groups
+    hostPath: /sys/kernel/iommu_groups
+  - containerPath: /dev/vfio
+    hostPath: /dev/vfio
 EOF
 
     # Add mesa library mounts for vGPU display support (used by mesa-injector webhook)
