@@ -43,7 +43,7 @@ The provider will validate that the fake vGPU is properly set up before creating
 
 #### Optional: Enable vGPU Display Support
 
-By default, vGPU display is disabled in tests because fake vGPU lacks OpenGL libraries.
+By default, vGPU display is disabled in tests because fake vGPU lacks OpenGL libraries.sudo
 To enable full display support:
 
 ```bash

@@ -109,34 +109,52 @@ function cleanup_fake_vgpu() {
     fi
 }
 
-function _add_mdev_mounts() {
-    # Add mdev_bus mount for fake vGPU support
-    # Note: The fake vGPU module creates devices under /sys/devices/virtual/nvidia/
-    cat <<EOF >> ${KUBEVIRTCI_CONFIG_PATH}/$KUBEVIRT_PROVIDER/kind.yaml
-  - containerPath: /sys/class/mdev_bus
-    hostPath: /sys/class/mdev_bus
-  - containerPath: /sys/bus/mdev
-    hostPath: /sys/bus/mdev
-  - containerPath: /sys/devices/virtual/nvidia
-    hostPath: /sys/devices/virtual/nvidia
-EOF
-
-    # Add mesa library mounts for vGPU display support (used by mesa-injector webhook)
-    if [ "${VGPU_DISPLAY:-false}" == "true" ]; then
+function _maybe_mount() {
+    # Append an extraMounts entry to the generated kind.yaml only when the
+    # host source path exists. Docker refuses to bind-mount a sysfs path
+    # that does not exist on the host (it would try to mkdir under /sys
+    # and get EPERM), so we must filter at config-generation time.
+    local host_path=$1
+    local container_path=${2:-$1}
+    if [[ -e "$host_path" ]]; then
         cat <<EOF >> ${KUBEVIRTCI_CONFIG_PATH}/$KUBEVIRT_PROVIDER/kind.yaml
-  - containerPath: /usr/lib64/libGL.so.1
-    hostPath: /usr/lib64/libGL.so.1
-  - containerPath: /usr/lib64/libEGL.so.1
-    hostPath: /usr/lib64/libEGL.so.1
-  - containerPath: /usr/lib64/libGLESv2.so.2
-    hostPath: /usr/lib64/libGLESv2.so.2
-  - containerPath: /usr/lib64/libGLX.so.0
-    hostPath: /usr/lib64/libGLX.so.0
-  - containerPath: /usr/lib64/dri
-    hostPath: /usr/lib64/dri
-  - containerPath: /usr/share/glvnd/egl_vendor.d
-    hostPath: /usr/share/glvnd/egl_vendor.d
+  - containerPath: ${container_path}
+    hostPath: ${host_path}
 EOF
+    else
+        echo "  (skipping mount of ${host_path}: not present on host)"
+    fi
+}
+
+function _add_mdev_mounts() {
+    # Mount whichever of the fake-vGPU / fake-PCI sysfs paths actually
+    # exist on this host at cluster-up time. The mapping is:
+    #
+    #   /sys/class/mdev_bus              <- fake-nvidia-vgpu module
+    #   /sys/bus/mdev                    <- fake-nvidia-vgpu (or real mdev)
+    #   /sys/devices/virtual/nvidia      <- fake-nvidia-vgpu parent device
+    #   /sys/kernel/iommu_groups         <- fake-iommu (or any real IOMMU)
+    #
+    # /dev/vfio is already mounted by the shared _add_extra_mounts in
+    # kind/common.sh for vgpu.* / sriov.* providers.
+    #
+    # Missing entries are skipped with a warning so the cluster can still
+    # come up; tests that depend on a missing path will fail later in a
+    # more diagnosable way.
+    _maybe_mount /sys/class/mdev_bus
+    _maybe_mount /sys/bus/mdev
+    _maybe_mount /sys/devices/virtual/nvidia
+    _maybe_mount /sys/kernel/iommu_groups
+
+    # Mesa libraries are only useful when VGPU_DISPLAY is on, and even then
+    # only if the host actually has them installed.
+    if [ "${VGPU_DISPLAY:-false}" == "true" ]; then
+        _maybe_mount /usr/lib64/libGL.so.1
+        _maybe_mount /usr/lib64/libEGL.so.1
+        _maybe_mount /usr/lib64/libGLESv2.so.2
+        _maybe_mount /usr/lib64/libGLX.so.0
+        _maybe_mount /usr/lib64/dri
+        _maybe_mount /usr/share/glvnd/egl_vendor.d
     fi
 }
 
