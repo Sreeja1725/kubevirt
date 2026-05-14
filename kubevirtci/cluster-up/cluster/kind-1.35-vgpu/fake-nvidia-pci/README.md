@@ -56,11 +56,18 @@ VFIO interface.
 
 ## Requirements
 
-- Linux kernel **5.16+** built with `CONFIG_PCI_DOMAINS=y` **and**
-  `CONFIG_PCI_DOMAINS_GENERIC=y` (true for Fedora 39+, RHEL 9, Ubuntu 22.04+,
-  Debian bookworm+ on x86_64 / arm64; the build will hard-error otherwise).
+- Linux kernel **5.16+** built with `CONFIG_PCI_DOMAINS=y` and **one of**:
+  - `CONFIG_PCI_DOMAINS_GENERIC=y` - the generic path, used by Fedora 39+,
+    RHEL 9, and arm64 / non-x86 distro kernels. The bridge's `domain_nr`
+    field is honored directly.
+  - An **x86 build** (Ubuntu's default `x86_64` kernels are GENERIC=n).
+    The module attaches a `struct pci_sysdata` to the bridge so the
+    architecture's `pci_domain_nr()` reader picks up our private domain.
+
   Verify with `zgrep PCI_DOMAINS /proc/config.gz` or
-  `grep PCI_DOMAINS /boot/config-$(uname -r)`.
+  `grep PCI_DOMAINS /boot/config-$(uname -r)`. Builds for non-x86 with
+  GENERIC=n hard-error in `compat.h`.
+
 - Kernel headers matching the running kernel
 - `make`, `gcc`, root privileges to insmod
 

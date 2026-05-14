@@ -27,6 +27,9 @@
  *   - Devices appear in their own PCI domain (default 0xfaca) to avoid
  *     colliding with the real PCI hierarchy at domain 0x0000. Requires a
  *     kernel built with CONFIG_PCI_DOMAINS=y (true for x86_64 / arm64).
+ *     The private domain is set via bridge->domain_nr on kernels with
+ *     CONFIG_PCI_DOMAINS_GENERIC=y, or via an attached struct pci_sysdata
+ *     on x86 builds where GENERIC is off (Ubuntu's default). See compat.h.
  *
  * Hotplug emulation:
  *   /sys/class/fake_nvidia_pci/control/hotplug_control accepts "hide" / "show"
@@ -41,10 +44,23 @@
 #include <linux/pci.h>
 #include <linux/device.h>
 #include <linux/mutex.h>
+#include <linux/numa.h>
 #include <linux/string.h>
 #include <linux/version.h>
 
 #include "compat.h"
+
+/*
+ * On x86 builds without CONFIG_PCI_DOMAINS_GENERIC the PCI domain is read
+ * from ((struct pci_sysdata *)bus->sysdata)->domain rather than from
+ * bridge->domain_nr. Include the arch header so we can stamp our own
+ * domain into a struct pci_sysdata that we attach to the bridge.
+ */
+#if !defined(CONFIG_PCI_DOMAINS_GENERIC) && \
+    (defined(CONFIG_X86) || defined(CONFIG_X86_64))
+#include <asm/pci.h>
+#define FAKE_PCI_USE_X86_SYSDATA 1
+#endif
 
 #define DRIVER_NAME             "fake_nvidia_pci"
 #define DRIVER_VERSION          "1.0"
@@ -106,6 +122,10 @@ static struct fake_pci_state {
 	struct pci_host_bridge *bridge;
 	struct pci_bus *bus;
 	bool bus_present;
+
+#ifdef FAKE_PCI_USE_X86_SYSDATA
+	struct pci_sysdata sysdata;
+#endif
 
 	struct mutex lock;
 } fpci;
@@ -301,15 +321,31 @@ static int fake_pci_bring_up(void)
 		return -ENOMEM;
 
 	bridge->ops      = &fake_pci_ops;
-	bridge->sysdata  = NULL;
 	bridge->busnr    = 0;
 	bridge->dev.parent = &fpci.control_dev;
+
 	/*
-	 * compat.h hard-requires CONFIG_PCI_DOMAINS_GENERIC=y, so this
-	 * assignment is honored by pci_register_host_bridge() and places our
-	 * synthetic bus in its own PCI domain instead of colliding with 0000.
+	 * Place our synthetic bus in its own PCI domain so the BDFs we
+	 * synthesize do not collide with the real PCI hierarchy at domain
+	 * 0x0000. Two code paths get us there, picked at build time by
+	 * compat.h:
+	 *
+	 *   - CONFIG_PCI_DOMAINS_GENERIC=y: pci_register_host_bridge()
+	 *     honors bridge->domain_nr directly.
+	 *   - x86 with GENERIC=n (Ubuntu's default): pci_domain_nr(bus)
+	 *     reads ((struct pci_sysdata *)bus->sysdata)->domain. We stamp
+	 *     our domain into a struct pci_sysdata embedded in our module
+	 *     state and hand a pointer to it via bridge->sysdata.
 	 */
-	bridge->domain_nr = (int)pci_domain;
+#ifdef FAKE_PCI_USE_X86_SYSDATA
+	memset(&fpci.sysdata, 0, sizeof(fpci.sysdata));
+	fpci.sysdata.domain = (int)pci_domain;
+	fpci.sysdata.node   = NUMA_NO_NODE;
+	bridge->sysdata     = &fpci.sysdata;
+#else
+	bridge->sysdata     = NULL;
+	bridge->domain_nr   = (int)pci_domain;
+#endif
 
 	/* Reset list pointers so we can re-use the static resource */
 	fake_pci_busn_res.parent  = NULL;

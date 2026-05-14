@@ -23,15 +23,24 @@
 #endif
 
 /*
- * CONFIG_PCI_DOMAINS_GENERIC=y is what actually causes the kernel to honor
- * pci_host_bridge->domain_nr at register time. Without it the field is
- * ignored and the synthetic bridge would land on domain 0, colliding with
- * the real host PCI hierarchy. Mainline x86_64 and arm64 distro kernels
- * (Fedora 39+, RHEL 9, Ubuntu 22.04+, Debian bookworm+) enable this; if
- * yours doesn't, rebuild the kernel with this option.
+ * Two paths get us a private PCI domain at register time:
+ *
+ *   1. CONFIG_PCI_DOMAINS_GENERIC=y - pci_register_host_bridge() honors
+ *      pci_host_bridge->domain_nr directly. Fedora 39+, RHEL 9, arm64
+ *      distros, and most non-x86 builds use this.
+ *
+ *   2. x86 (CONFIG_X86, CONFIG_X86_64) - even with GENERIC=n (Ubuntu's
+ *      default for x86_64), the kernel reads the bus's domain from
+ *      ((struct pci_sysdata *)bus->sysdata)->domain. We attach our own
+ *      struct pci_sysdata to bridge->sysdata in fake-nvidia-pci.c.
+ *
+ * If neither path is available (e.g. an arm32 build with GENERIC=n) the
+ * module would land on domain 0 and collide with the real hierarchy, so
+ * we hard-fail at build time.
  */
-#ifndef CONFIG_PCI_DOMAINS_GENERIC
-#error "This module requires CONFIG_PCI_DOMAINS_GENERIC=y (otherwise bridge->domain_nr is ignored and our private domain collides with bus 0000)"
+#if !defined(CONFIG_PCI_DOMAINS_GENERIC) && \
+    !defined(CONFIG_X86) && !defined(CONFIG_X86_64)
+#error "This module requires either CONFIG_PCI_DOMAINS_GENERIC=y or an x86 build"
 #endif
 
 /*
