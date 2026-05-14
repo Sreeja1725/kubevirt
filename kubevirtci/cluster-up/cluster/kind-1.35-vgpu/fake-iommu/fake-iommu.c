@@ -189,7 +189,23 @@ static const struct iommu_ops fake_iommu_ops = {
 
 /* ---------- claiming devices via fwspec + PCI bus notifier ---------- */
 
-static int fake_iommu_claim_device(struct device *dev)
+/*
+ * Setting fwspec is the only thing we do per device here. We deliberately
+ * never call iommu_probe_device() ourselves: it lives in
+ * drivers/iommu/iommu-priv.h and is not exported to out-of-tree modules.
+ * The probe is triggered by the kernel in two ways:
+ *
+ *   - For devices that exist at module load time: iommu_device_register()
+ *     internally calls bus_iommu_probe() for each registered bus, which
+ *     walks every device on the bus and probes any with a matching
+ *     fwspec. So we set fwspec *before* iommu_device_register().
+ *
+ *   - For devices hotplugged later: the kernel installs its own per-bus
+ *     iommu notifier (priority 0) that probes on BUS_NOTIFY_ADD_DEVICE.
+ *     We install ours with priority > 0 so we run first and have fwspec
+ *     in place by the time the kernel's notifier probes.
+ */
+static int fake_iommu_set_fwspec(struct device *dev)
 {
 	int ret;
 
@@ -209,25 +225,7 @@ static int fake_iommu_claim_device(struct device *dev)
 		return ret;
 	}
 
-	ret = iommu_probe_device(dev);
-	if (ret) {
-		dev_err(dev, "%s: iommu_probe_device failed: %d\n",
-			DRIVER_NAME, ret);
-		return ret;
-	}
-
-	{
-		struct iommu_group *grp = iommu_group_get(dev);
-
-		if (grp) {
-			dev_info(dev, "%s: claimed (iommu_group=%d)\n",
-				 DRIVER_NAME, iommu_group_id(grp));
-			iommu_group_put(grp);
-		} else {
-			dev_info(dev, "%s: claimed (no group?)\n",
-				 DRIVER_NAME);
-		}
-	}
+	dev_info(dev, "%s: fwspec set; awaiting iommu probe\n", DRIVER_NAME);
 	return 0;
 }
 
@@ -236,24 +234,31 @@ static int fake_iommu_bus_notify(struct notifier_block *nb,
 {
 	struct device *dev = data;
 
+	/*
+	 * Higher priority than the kernel's iommu_bus_notifier (priority 0),
+	 * so this runs first and fwspec is already in place when the kernel
+	 * tries to probe the device.
+	 */
 	if (action == BUS_NOTIFY_ADD_DEVICE)
-		(void)fake_iommu_claim_device(dev);
+		(void)fake_iommu_set_fwspec(dev);
 
 	return NOTIFY_OK;
 }
 
-static void fake_iommu_claim_existing(void)
+static void fake_iommu_seed_existing(void)
 {
 	struct pci_dev *pdev = NULL;
 
 	/*
 	 * fake-nvidia-pci may have been loaded before us, in which case its
-	 * devices already exist and the bus notifier won't fire for them.
-	 * Walk every PCI device and claim the ones on our target domain.
+	 * devices already exist and our bus notifier never fired for them.
+	 * Walk every PCI device and set fwspec on the ones on our target
+	 * domain so iommu_device_register()'s bus_iommu_probe() picks them
+	 * up.
 	 */
 	for_each_pci_dev(pdev) {
 		if (pci_domain_nr(pdev->bus) == (int)target_domain)
-			(void)fake_iommu_claim_device(&pdev->dev);
+			(void)fake_iommu_set_fwspec(&pdev->dev);
 	}
 }
 
@@ -310,36 +315,52 @@ static int __init fake_iommu_init(void)
 
 	fake_iommu_dev.fwnode = fake_iommu_fwnode;
 
-	/* 4. Register with the IOMMU framework. */
+	/*
+	 * 4. Install our high-priority PCI bus notifier *before* registering
+	 *    the IOMMU. The kernel's own iommu bus notifier (priority 0) is
+	 *    installed inside iommu_device_register() and runs after ours,
+	 *    so by the time it probes a newly-added device, our notifier
+	 *    has already populated the fwspec.
+	 */
+	pci_bus_nb.notifier_call = fake_iommu_bus_notify;
+	pci_bus_nb.priority = 100;
+	ret = bus_register_notifier(&pci_bus_type, &pci_bus_nb);
+	if (ret) {
+		pr_err("%s: bus_register_notifier(pci) failed: %d\n",
+		       DRIVER_NAME, ret);
+		goto err_sysfs;
+	}
+	bus_nb_registered = true;
+
+	/*
+	 * 5. Seed fwspec on fake PCI devices that were created before we
+	 *    loaded. iommu_device_register() will then probe them via
+	 *    bus_iommu_probe().
+	 */
+	fake_iommu_seed_existing();
+
+	/*
+	 * 6. Register with the IOMMU framework. This walks every device on
+	 *    pci_bus_type via bus_iommu_probe() and calls our
+	 *    fake_iommu_probe_device() ops callback for each one whose
+	 *    fwspec points at our fwnode.
+	 */
 	ret = iommu_device_register(&fake_iommu_dev, &fake_iommu_ops,
 				    &fake_iommu_pdev->dev);
 	if (ret) {
 		pr_err("%s: iommu_device_register failed: %d\n",
 		       DRIVER_NAME, ret);
-		goto err_sysfs;
+		goto err_nb;
 	}
 	iommu_registered = true;
-
-	/* 5. Listen for new PCI devices appearing on our target domain. */
-	pci_bus_nb.notifier_call = fake_iommu_bus_notify;
-	ret = bus_register_notifier(&pci_bus_type, &pci_bus_nb);
-	if (ret) {
-		pr_err("%s: bus_register_notifier(pci) failed: %d\n",
-		       DRIVER_NAME, ret);
-		goto err_iommu;
-	}
-	bus_nb_registered = true;
-
-	/* 6. Claim any devices that were created before this module loaded. */
-	fake_iommu_claim_existing();
 
 	pr_info("%s: ready (claiming PCI devices on domain 0x%x)\n",
 		DRIVER_NAME, target_domain);
 	return 0;
 
-err_iommu:
-	iommu_device_unregister(&fake_iommu_dev);
-	iommu_registered = false;
+err_nb:
+	bus_unregister_notifier(&pci_bus_type, &pci_bus_nb);
+	bus_nb_registered = false;
 err_sysfs:
 	iommu_device_sysfs_remove(&fake_iommu_dev);
 err_pdev:

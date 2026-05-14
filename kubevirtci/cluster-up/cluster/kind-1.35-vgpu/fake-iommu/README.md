@@ -18,12 +18,30 @@ This module satisfies vfio-pci's prerequisite by:
 
 1. Registering a software-only `struct iommu_device` with the kernel IOMMU
    framework.
-2. Listening on `pci_bus_type` for new devices.
+2. Listening on `pci_bus_type` for new devices via a high-priority bus
+   notifier (priority 100) that runs *before* the kernel's own IOMMU bus
+   notifier (priority 0).
 3. Filtering for devices whose PCI domain matches `target_domain`
    (default `0xfaca`).
 4. Setting up an `iommu_fwspec` on each matching device that points at this
-   module, then calling `iommu_probe_device()` to wire it into a
-   per-device IOMMU group.
+   module's fwnode. The kernel's own iommu bus notifier then probes the
+   device automatically on `BUS_NOTIFY_ADD_DEVICE`, finds our ops via
+   `iommu_ops_from_fwnode()`, and wires the device into a per-device IOMMU
+   group through our `probe_device` / `device_group` ops callbacks.
+
+We deliberately never call `iommu_probe_device()` directly: it lives in
+`drivers/iommu/iommu-priv.h` and is not exported to out-of-tree modules.
+Instead we lean on two existing kernel mechanisms to do the probe for us:
+
+- `iommu_device_register()` internally calls `bus_iommu_probe()` for every
+  bus the new IOMMU registered on, which walks every device on that bus
+  and probes any with a matching fwspec. So before calling it we set
+  fwspec on every fake PCI device that already exists.
+- For devices that hotplug later, the kernel's per-bus iommu notifier
+  fires on `BUS_NOTIFY_ADD_DEVICE` and calls `iommu_probe_device()`
+  internally. Because our notifier has a higher priority and runs first,
+  the fwspec is already in place by the time the kernel's notifier
+  probes.
 
 The IOMMU's `map_pages` / `unmap_pages` / `attach_dev` callbacks are no-ops
 or identity. **No real DMA path is provided**, because the fake PCI devices
@@ -133,19 +151,23 @@ fake_iommu_init()
   fwnode_create_software_node()              -> /dev/.../sw-node
   platform_device_register_simple()          -> /sys/devices/platform/fake_iommu.0
   iommu_device_sysfs_add(..., "fake-iommu")  -> /sys/class/iommu/fake-iommu
-  iommu_device_register(&dev, &ops, hwdev)   -> kernel iommu framework
-  bus_register_notifier(&pci_bus_type, nb)   -> hook PCI hotplug
-  fake_iommu_claim_existing()                -> handle pre-existing devices
+  bus_register_notifier(&pci_bus_type, nb)   -> hook PCI hotplug (priority 100)
+  fake_iommu_seed_existing()                 -> set fwspec on already-present devs
+  iommu_device_register(&dev, &ops, hwdev)
+    -> kernel walks pci_bus_type via bus_iommu_probe()
+    -> for every device with a matching fwspec, calls our probe_device ops
+    -> /sys/bus/pci/devices/<bdf>/iommu_group symlink appears
 
-<later, when fake-nvidia-pci adds devices>
-pci_bus -> BUS_NOTIFY_ADD_DEVICE -> fake_iommu_bus_notify()
-  fake_iommu_device_on_target_domain(dev) ? yes
-  iommu_fwspec_init(dev, fwnode, &ops)
-  iommu_probe_device(dev)
-    -> dev_iommu_ops(dev) returns &fake_iommu_ops
-    -> ops.probe_device(dev) returns &fake_iommu_dev
-    -> ops.device_group(dev) = generic_device_group()
-  /sys/bus/pci/devices/<bdf>/iommu_group symlink appears
+<later, when fake-nvidia-pci adds new devices>
+pci_bus -> BUS_NOTIFY_ADD_DEVICE
+  (priority 100) fake_iommu_bus_notify() -> fake_iommu_set_fwspec()
+                    iommu_fwspec_init(dev, fwnode, &ops)
+  (priority 0)   kernel iommu_bus_notifier()
+                    iommu_probe_device(dev)     [private API, kernel-internal]
+                       -> iommu_ops_from_fwnode(fwspec->iommu_fwnode)
+                       -> ops.probe_device(dev) returns &fake_iommu_dev
+                       -> ops.device_group(dev) = generic_device_group()
+                       -> /sys/bus/pci/devices/<bdf>/iommu_group appears
 ```
 
 When `vfio-pci` is later asked to bind to one of these devices, its probe
