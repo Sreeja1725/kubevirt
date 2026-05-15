@@ -67,37 +67,6 @@ struct fake_iommu_domain {
 	struct iommu_domain domain;
 };
 
-static struct iommu_domain *fake_iommu_domain_alloc(unsigned type)
-{
-	struct fake_iommu_domain *d;
-
-	/*
-	 * Support only the two domain types vfio-pci needs:
-	 *   IOMMU_DOMAIN_DMA       - regular DMA API
-	 *   IOMMU_DOMAIN_UNMANAGED - VFIO's own domain
-	 * For anything else (e.g. IOMMU_DOMAIN_IDENTITY, _BLOCKED) we return
-	 * NULL so the core can fall back to its default behaviour.
-	 */
-	if (type != IOMMU_DOMAIN_DMA && type != IOMMU_DOMAIN_UNMANAGED)
-		return NULL;
-
-	d = kzalloc(sizeof(*d), GFP_KERNEL);
-	if (!d)
-		return NULL;
-
-	d->domain.geometry.aperture_start = 0;
-	d->domain.geometry.aperture_end   = ~0ULL;
-	d->domain.geometry.force_aperture = true;
-	d->domain.pgsize_bitmap           = SZ_4K;
-
-	return &d->domain;
-}
-
-static void fake_iommu_domain_free(struct iommu_domain *domain)
-{
-	kfree(container_of(domain, struct fake_iommu_domain, domain));
-}
-
 static int fake_iommu_attach_dev(struct iommu_domain *domain,
 				 struct device *dev)
 {
@@ -134,6 +103,11 @@ static phys_addr_t fake_iommu_iova_to_phys(struct iommu_domain *domain,
 	return (phys_addr_t)iova;
 }
 
+static void fake_iommu_domain_free(struct iommu_domain *domain)
+{
+	kfree(container_of(domain, struct fake_iommu_domain, domain));
+}
+
 static const struct iommu_domain_ops fake_iommu_domain_ops = {
 	.attach_dev    = fake_iommu_attach_dev,
 	.map_pages     = fake_iommu_map_pages,
@@ -141,6 +115,76 @@ static const struct iommu_domain_ops fake_iommu_domain_ops = {
 	.iova_to_phys  = fake_iommu_iova_to_phys,
 	.free          = fake_iommu_domain_free,
 };
+
+/*
+ * Static identity and blocked domains.
+ *
+ * Modern IOMMU core (6.5+) calls iommu_group_claim_dma_owner() during vfio-pci
+ * probe, which in turn calls __iommu_group_alloc_blocking_domain() ->
+ * __iommu_domain_alloc(..., IOMMU_DOMAIN_BLOCKED). The core looks at
+ * ops->blocked_domain first; if NULL it falls back to ops->domain_alloc(BLOCKED)
+ * and treats a NULL return as -ENOMEM (silently surfaced as -EINVAL up at
+ * vfio-pci.probe). The same logic applies to IOMMU_DOMAIN_IDENTITY.
+ *
+ * Providing the two static domains is the canonical way modern IOMMU drivers
+ * (apple-dart, arm-smmu, etc.) advertise "I support these without a real
+ * page-table allocation". Because our IOMMU has no real DMA path, the attach
+ * callback can just succeed and the kernel never asks for a map/unmap on
+ * these domains.
+ *
+ * The free callback must be a no-op for static domains: the default
+ * fake_iommu_domain_free() would kfree() a statically-allocated struct.
+ */
+static void fake_iommu_static_domain_free(struct iommu_domain *domain)
+{
+	/* no-op: identity / blocked domains are statically allocated */
+}
+
+static const struct iommu_domain_ops fake_iommu_static_domain_ops = {
+	.attach_dev = fake_iommu_attach_dev,
+	.free       = fake_iommu_static_domain_free,
+};
+
+static struct iommu_domain fake_iommu_identity_domain = {
+	.type = IOMMU_DOMAIN_IDENTITY,
+	.ops  = &fake_iommu_static_domain_ops,
+};
+
+static struct iommu_domain fake_iommu_blocked_domain = {
+	.type = IOMMU_DOMAIN_BLOCKED,
+	.ops  = &fake_iommu_static_domain_ops,
+};
+
+static struct iommu_domain *fake_iommu_domain_alloc(unsigned type)
+{
+	struct fake_iommu_domain *d;
+
+	/*
+	 * IDENTITY / BLOCKED requests are normally served by the static
+	 * domains above (the core checks ops->identity_domain /
+	 * ops->blocked_domain first). We still handle them here as a
+	 * fallback in case the caller bypasses the static-pointer
+	 * fast-path.
+	 */
+	if (type == IOMMU_DOMAIN_IDENTITY)
+		return &fake_iommu_identity_domain;
+	if (type == IOMMU_DOMAIN_BLOCKED)
+		return &fake_iommu_blocked_domain;
+
+	if (type != IOMMU_DOMAIN_DMA && type != IOMMU_DOMAIN_UNMANAGED)
+		return NULL;
+
+	d = kzalloc(sizeof(*d), GFP_KERNEL);
+	if (!d)
+		return NULL;
+
+	d->domain.geometry.aperture_start = 0;
+	d->domain.geometry.aperture_end   = ~0ULL;
+	d->domain.geometry.force_aperture = true;
+	d->domain.pgsize_bitmap           = SZ_4K;
+
+	return &d->domain;
+}
 
 /* ---------- iommu_ops ---------- */
 
@@ -177,12 +221,39 @@ static struct iommu_group *fake_iommu_device_group(struct device *dev)
 	return generic_device_group(dev);
 }
 
+/*
+ * vfio_register_group_dev() requires IOMMU_CAP_CACHE_COHERENCY (it sets
+ * IOMMU_CACHE on every mapping unconditionally) and silently returns
+ * -EINVAL from vfio-pci probe if the IOMMU does not advertise it. With no
+ * .capable callback, device_iommu_capable() returns false for every cap, so
+ * the bind quietly fails before any vfio-pci dev_dbg fires.
+ *
+ * Note: kernels <6.5 also had IOMMU_CAP_INTR_REMAP here. It was dropped in
+ * favor of per-group reporting via iommu_group_has_isolated_msi(). On 6.8
+ * the symbol is gone, so we don't reference it. If the iommufd / vfio
+ * binding path needs interrupt-remapping later, it will look at the per-
+ * group MSI state instead, which can be relaxed via the module parameter
+ * vfio_iommu_type1.allow_unsafe_interrupts=1.
+ */
+static bool fake_iommu_capable(struct device *dev, enum iommu_cap cap)
+{
+	switch (cap) {
+	case IOMMU_CAP_CACHE_COHERENCY:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static const struct iommu_ops fake_iommu_ops = {
+	.capable             = fake_iommu_capable,
 	.domain_alloc        = fake_iommu_domain_alloc,
 	.probe_device        = fake_iommu_probe_device,
 	.release_device      = fake_iommu_release_device,
 	.device_group        = fake_iommu_device_group,
 	.pgsize_bitmap       = SZ_4K,
+	.identity_domain     = &fake_iommu_identity_domain,
+	.blocked_domain      = &fake_iommu_blocked_domain,
 	.default_domain_ops  = &fake_iommu_domain_ops,
 	.owner               = THIS_MODULE,
 };

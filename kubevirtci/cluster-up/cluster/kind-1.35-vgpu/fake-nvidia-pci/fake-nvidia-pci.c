@@ -295,6 +295,28 @@ static int fake_pci_write(struct pci_bus *bus, unsigned int devfn,
 			STORE_LE32(&cfg[where], 0);
 		break;
 
+	case 0x64:	/* PM cap base (0x60) + PCI_PM_CTRL (0x04) = PMCSR */
+		/*
+		 * vfio-pci.probe() does pci_set_power_state(D3hot) immediately
+		 * after binding and reads PMCSR back to verify the transition.
+		 * If we drop writes, the readback returns D0, the kernel logs
+		 *   "Refused to change power state from D0 to D3hot"
+		 * and (on Ubuntu's 6.8.0-90 kernel) probe fails with -EINVAL.
+		 *
+		 * Honor 2-byte writes to PMCSR. We track only the PowerState
+		 * bits [1:0]; PME_En/PME_Status/Data_* are advertised as
+		 * unsupported in PMC (we set PMC=0x0003: version=3, no D1/D2
+		 * and PME_Support=0), so dev->pme_support is 0 and the kernel
+		 * never touches the upper bits.
+		 */
+		if (size == 2) {
+			u16 cur = le16_to_cpup((__le16 *)&cfg[where]);
+
+			cur = (cur & ~0x0003u) | ((u16)val & 0x0003u);
+			STORE_LE16(&cfg[where], cur);
+		}
+		break;
+
 	default:
 		/* Drop other writes */
 		break;

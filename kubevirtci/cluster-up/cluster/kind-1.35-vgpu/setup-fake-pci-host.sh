@@ -199,8 +199,13 @@ show_status() {
         v=$(cat "${dev}/vendor" 2>/dev/null || echo "?")
         d=$(cat "${dev}/device" 2>/dev/null || echo "?")
         c=$(cat "${dev}/class" 2>/dev/null || echo "?")
-        grp=$(readlink -f "${dev}/iommu_group" 2>/dev/null | awk -F/ '{print $NF}')
-        drv=$(readlink -f "${dev}/driver" 2>/dev/null | awk -F/ '{print $NF}')
+        # NOTE: use plain readlink (not -f). For our fake devices, parented
+        # under /sys/devices/virtual/fake_nvidia_pci/control/, readlink -f
+        # canonicalizes through /sys/bus/pci/drivers/<name>/driver and the
+        # final basename comes out as the literal "driver", not the driver
+        # name. Plain readlink dereferences only the immediate symlink.
+        grp=$(basename "$(readlink "${dev}/iommu_group" 2>/dev/null)" 2>/dev/null)
+        drv=$(basename "$(readlink "${dev}/driver" 2>/dev/null)" 2>/dev/null)
         [[ -z "${grp}" ]] && grp="-"
         [[ -z "${drv}" ]] && drv="-"
         echo "  ${bdf}  vendor=${v} device=${d} class=${c} iommu_group=${grp} driver=${drv}"
@@ -245,7 +250,7 @@ bind_vfio() {
         bdf=$(basename "${dev}")
         [[ "${bdf}" == 0000:* ]] && continue
         local drv
-        drv=$(readlink -f "${dev}/driver" 2>/dev/null | awk -F/ '{print $NF}')
+        drv=$(basename "$(readlink "${dev}/driver" 2>/dev/null)" 2>/dev/null)
         echo "  ${bdf}  driver=${drv:-none}"
     done
     echo ""
