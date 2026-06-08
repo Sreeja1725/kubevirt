@@ -22,7 +22,7 @@ DRA_EXAMPLE_DRIVER_BRANCH="kubevirt-dra-profile"
 DRA_EXAMPLE_DRIVER_DIR=${DRA_EXAMPLE_DRIVER_DIR:-"${KUBEVIRTCI_CONFIG_PATH}/${KUBEVIRT_PROVIDER}/_dra-example-driver"}
 
 function cluster::_get_dra_repo() {
-    git --git-dir "${DRA_EXAMPLE_DRIVER_DIR}/.git" config --get remote.origin.url
+    git --git-dir "${DRA_EXAMPLE_DRIVER_DIR}/.git" config --get remote.origin.url 2>/dev/null || true
 }
 
 function cluster::_dra_driver_image_tag() {

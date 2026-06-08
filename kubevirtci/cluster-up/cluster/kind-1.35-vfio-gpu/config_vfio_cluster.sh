@@ -82,6 +82,7 @@ node::discover_devices() {
     "${CONTAINER_TOOL}" exec "${node}" bash -c '
         found=0
         for d in /sys/bus/pci/drivers/vfio-pci/*; do
+            [[ -e "$d" ]] || continue
             bdf=$(basename "$d")
             [[ "$bdf" == "bind"   ]] && continue
             [[ "$bdf" == "unbind" ]] && continue
