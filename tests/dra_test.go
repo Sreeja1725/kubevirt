@@ -368,7 +368,7 @@ var _ = Describe("[sig-compute]DRA failing scenarios", Serial, decorators.SigCom
 				WithVfioGPUResourceClaimTemplate(draVfioClaimTemplateName),
 				WithVfioGPUMultipleHostDevices(draVfioMatchAttributeRequestCount),
 			)
-			_, err = virtClient.VirtualMachineInstance(namespace).Create(context.Background(), vmi, metav1.CreateOptions{})
+			vmi, err = virtClient.VirtualMachineInstance(namespace).Create(context.Background(), vmi, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
 
 			time.Sleep(10 * time.Second)
