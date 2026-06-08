@@ -41,7 +41,6 @@
 #include <linux/pci.h>
 #include <linux/numa.h>
 #include <linux/string.h>
-#include <linux/unaligned.h>
 #include <linux/version.h>
 
 #include "compat.h"
