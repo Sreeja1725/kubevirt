@@ -184,7 +184,6 @@ static struct iommu_device *fake_iommu_probe_device(struct device *dev)
 static void fake_iommu_release_device(struct device *dev)
 {
     dev_dbg(dev, "%s: release_device\n", DRIVER_NAME);
-    iommu_fwspec_free(dev);
 }
 
 static struct iommu_group *fake_iommu_device_group(struct device *dev)
