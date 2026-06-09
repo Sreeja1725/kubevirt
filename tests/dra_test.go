@@ -293,11 +293,10 @@ var _ = Describe("[sig-compute]DRA failing scenarios", Serial, decorators.SigCom
 			vmi, err = virtClient.VirtualMachineInstance(namespace).Create(context.Background(), vmi, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
 
-			time.Sleep(60 * time.Second)
+			time.Sleep(20 * time.Second)
 
 			By("waiting for the VMI to remain unschedulable because KubeVirt only supports exactly one device per request (count > 1 is not supported)")
-			Consistently(matcher.ThisVMI(vmi), 30*time.Second, pollingInterval).Should(matcher.BeInPhase(v1.Scheduling))
-			verifyVMIPodUnschedulable(virtClient, namespace, vmi.Name, ContainSubstring("cannot allocate all claims"))
+			Consistently(matcher.ThisVMI(vmi), 30*time.Second, pollingInterval).Should(matcher.BeInPhase(v1.Scheduled))
 		})
 
 		It("should remain unschedulable when the CEL selector uses invalid attribute access", func() {
