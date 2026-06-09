@@ -26,8 +26,15 @@ registry at `localhost:5000`.
 
 Linux host with kernel headers, `docker`, `kind`, `kubectl`, `helm`, `git`, `make` and `sudo`.
 
-Debian/Ubuntu: `sudo apt-get install linux-headers-$(uname -r)`  
-Fedora/RHEL: `sudo dnf install kernel-devel-$(uname -r)`
+Debian/Ubuntu:
+```bash
+sudo apt-get install linux-headers-$(uname -r) libelf-dev
+```
+
+Fedora/RHEL (kernel **6.0+** required for fake-iommu / vfio passthrough):
+```bash
+sudo dnf install kernel-devel-$(uname -r) elfutils-libelf-devel
+```
 
 ## Host setup (before cluster-up)
 

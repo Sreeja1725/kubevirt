@@ -40,7 +40,7 @@ if [ ! -x "${VFIO_DIR}/setup-fake-pci-host.sh" ]; then
     exit 1
 fi
 
-build_modules() {
+check_build_deps() {
     local kdir="/lib/modules/$(uname -r)/build"
     if [[ ! -d "${kdir}" ]]; then
         echo "ERROR: kernel headers not found at ${kdir}"
@@ -49,6 +49,28 @@ build_modules() {
         echo "  Fedora/RHEL:   sudo dnf install kernel-devel-$(uname -r)"
         exit 1
     fi
+
+    # RHEL/CentOS kernels with CONFIG_UNWINDER_ORC=y need libelf at module build time.
+    if [[ ! -f /usr/include/libelf.h ]] && ! pkg-config --exists libelf 2>/dev/null; then
+        echo "ERROR: libelf headers not found (required to build kernel modules on this kernel)"
+        echo "Install the development package, then retry:"
+        echo "  Debian/Ubuntu: sudo apt-get install libelf-dev"
+        echo "  Fedora/RHEL:   sudo dnf install elfutils-libelf-devel"
+        exit 1
+    fi
+
+    local kernel_major
+    kernel_major=$(uname -r | cut -d. -f1)
+    if [[ "${FAKE_IOMMU}" == "true" ]] && [[ "${kernel_major}" -lt 6 ]]; then
+        echo "ERROR: fake-iommu requires Linux kernel 6.0 or later (running $(uname -r))"
+        echo "Use a host with kernel >= 6.0 for vfio-pci passthrough tests."
+        echo "Discovery-only mode (no VMI Running tests): FAKE_IOMMU=false $0 setup"
+        exit 1
+    fi
+}
+
+build_modules() {
+    check_build_deps
 
     log "Cleaning and rebuilding fake-iommu + fake-pci for kernel $(uname -r)"
     make -C "${VFIO_DIR}/fake-iommu" clean
