@@ -40,7 +40,15 @@ function cluster::clone_dra_example_driver() {
     if [ ! -d "${DRA_EXAMPLE_DRIVER_DIR}" ]; then
         git clone --depth 1 --branch "${DRA_EXAMPLE_DRIVER_BRANCH}" \
             "${DRA_EXAMPLE_DRIVER_REPO}" "${DRA_EXAMPLE_DRIVER_DIR}"
+    else
+        echo "Updating DRA example driver (${DRA_EXAMPLE_DRIVER_BRANCH})..."
+        git -C "${DRA_EXAMPLE_DRIVER_DIR}" fetch --depth 1 origin "${DRA_EXAMPLE_DRIVER_BRANCH}"
+        git -C "${DRA_EXAMPLE_DRIVER_DIR}" checkout -B "${DRA_EXAMPLE_DRIVER_BRANCH}" \
+            "origin/${DRA_EXAMPLE_DRIVER_BRANCH}"
+        git -C "${DRA_EXAMPLE_DRIVER_DIR}" reset --hard "origin/${DRA_EXAMPLE_DRIVER_BRANCH}"
     fi
+
+    echo "DRA example driver source: $(git -C "${DRA_EXAMPLE_DRIVER_DIR}" log -1 --oneline)"
 }
 
 function cluster::install_dra_example_driver() {
