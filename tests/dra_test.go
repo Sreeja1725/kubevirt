@@ -60,7 +60,7 @@ const (
 	draVfioVMICount                   = 8
 	draVfioMultiDeviceRequestCount    = 3
 	draVfioMatchAttributeRequestCount = 2
-	draVfioVendorIDMatchAttribute     = "vfio-gpu.example.com/VendorID"
+	draVfioVendorIDMatchAttribute     = "vfio-gpu.example.com/vendorID"
 	draVfioPCIBusIDMatchAttribute     = "resource.kubernetes.io/pciBusID"
 	timeout                           = 2 * time.Minute
 	draCleanupTimeout                 = 90 * time.Second
@@ -209,7 +209,7 @@ var _ = Describe("[sig-compute]DRA", Serial, decorators.SigCompute, func() {
 				WithVfioGPUResourceClaimTemplate(draVfioClaimTemplateName),
 				WithVfioGPUMultipleHostDevices(draVfioMatchAttributeRequestCount),
 			)
-			_, err = virtClient.VirtualMachineInstance(namespace).Create(context.Background(), vmi, metav1.CreateOptions{})
+			vmi, err = virtClient.VirtualMachineInstance(namespace).Create(context.Background(), vmi, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Waiting for the VMI to reach Running")
