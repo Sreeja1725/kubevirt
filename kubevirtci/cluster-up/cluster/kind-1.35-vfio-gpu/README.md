@@ -35,6 +35,7 @@ Build the kernel modules and bind synthetic devices to `vfio-pci`:
 
 ```bash
 export FAKE_PCI_DEVICES=8
+export FAKE_IOMMU=true
 bash kubevirtci/cluster-up/cluster/kind-1.35-vfio-gpu/setup-host-vfio-pci.sh
 ```
 or
@@ -59,6 +60,7 @@ To change the device count after a previous setup, run `cleanup` first:
 ```bash
 sudo bash kubevirtci/cluster-up/cluster/kind-1.35-vfio-gpu/setup-fake-pci-host.sh cleanup
 export FAKE_PCI_DEVICES=8
+export FAKE_IOMMU=true
 bash kubevirtci/cluster-up/cluster/kind-1.35-vfio-gpu/setup-host-vfio-pci.sh
 ```
 

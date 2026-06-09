@@ -18,7 +18,7 @@
 #
 
 DRA_EXAMPLE_DRIVER_REPO="https://github.com/Sreeja1725/dra-example-driver.git"
-DRA_EXAMPLE_DRIVER_BRANCH="for-testing-dra"
+DRA_EXAMPLE_DRIVER_BRANCH="kubevirt-dra-profile"
 DRA_EXAMPLE_DRIVER_DIR=${DRA_EXAMPLE_DRIVER_DIR:-"${KUBEVIRTCI_CONFIG_PATH}/${KUBEVIRT_PROVIDER}/_dra-example-driver"}
 
 function cluster::_get_dra_repo() {

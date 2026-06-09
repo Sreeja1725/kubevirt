@@ -25,6 +25,8 @@ SCRIPT_PATH=$(dirname "$(realpath "$0")")
 VFIO_DIR="${SCRIPT_PATH}"
 
 : "${FAKE_PCI_DEVICES:=8}"
+: "${FAKE_IOMMU:=true}"
+export FAKE_PCI_DEVICES FAKE_IOMMU
 
 log() { echo "[setup-host-vfio-pci] $*"; }
 
