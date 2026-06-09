@@ -13,12 +13,6 @@
 
 #include <linux/version.h>
 
-/*
- * linux/unaligned.h was removed in 6.8; use the arch header directly.
- * get_unaligned_le16/le32 and put_unaligned_le16/le32 live here.
- */
-#include <asm/unaligned.h>
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)
 #error "This module requires kernel 5.16 or later"
 #endif
