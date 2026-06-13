@@ -78,7 +78,7 @@ func getCert() (certFile, keyFile string) {
 	if certFile == "" || keyFile == "" {
 		panic("TLS config incomplete")
 	}
-	return
+	return certFile, keyFile
 }
 
 func getListenAddr() string {
@@ -98,7 +98,7 @@ func getDeadline() (result time.Time) {
 			panic("Invalid Deadline")
 		}
 	}
-	return
+	return result
 }
 
 func getBackupUID() string {
