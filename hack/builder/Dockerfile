@@ -76,12 +76,12 @@ RUN set -x && \
     source /etc/profile.d/gimme.sh && \
     go install -v golang.org/x/tools/cmd/goimports@d5fe738 && \
     go install -v mvdan.cc/sh/v3/cmd/shfmt@v3.1.1 && \
-    go install -v k8s.io/code-generator/cmd/conversion-gen@v0.32.5  && \
-    go install -v k8s.io/code-generator/cmd/deepcopy-gen@v0.32.5 && \
-    go install -v k8s.io/code-generator/cmd/defaulter-gen@v0.32.5  && \
-    go install -v k8s.io/kube-openapi/cmd/openapi-gen@v0.0.0-20260330154417-16be699c7b31 && \
+    go install -v k8s.io/code-generator/cmd/conversion-gen@v0.36.2  && \
+    go install -v k8s.io/code-generator/cmd/deepcopy-gen@v0.36.2 && \
+    go install -v k8s.io/code-generator/cmd/defaulter-gen@v0.36.2  && \
+    go install -v k8s.io/kube-openapi/cmd/openapi-gen@v0.0.0-20260317180543-43fb72c5454a && \
     go install -v github.com/golang/protobuf/protoc-gen-go@1643683 && \
-    go install -v k8s.io/code-generator/cmd/client-gen@v0.32.5 && \
+    go install -v k8s.io/code-generator/cmd/client-gen@v0.36.2 && \
     go install -v github.com/securego/gosec/v2/cmd/gosec@0ce48a5 && \
     go install -v sigs.k8s.io/controller-tools/cmd/controller-gen@v0.20.1 && \
     go install -v github.com/kubevirt/monitoring/monitoringlinter/cmd/monitoringlinter@a4b5158 && \

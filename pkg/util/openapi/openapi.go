@@ -20,6 +20,7 @@ import (
 	"k8s.io/kube-openapi/pkg/common/restfuladapter"
 	handler3 "k8s.io/kube-openapi/pkg/handler3"
 	"k8s.io/kube-openapi/pkg/spec3"
+	openapiutil "k8s.io/kube-openapi/pkg/util"
 	"k8s.io/kube-openapi/pkg/validation/errors"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 	v1 "kubevirt.io/api/core/v1"
@@ -30,6 +31,28 @@ type Validator struct {
 	specSchemes   *openapi_spec.Schema
 	statusSchemes *openapi_spec.Schema
 	topLevelKeys  map[string]interface{}
+}
+
+func getOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+	m := api.GetOpenAPIDefinitions(ref)
+	for k, v := range m {
+		if restName := openapiutil.ToRESTFriendlyName(k); restName != k {
+			if _, exists := m[restName]; !exists {
+				m[restName] = v
+			}
+		}
+	}
+	return m
+}
+
+func getDefinitionName(name string) (string, spec.Extensions) {
+	if strings.Contains(name, "kubevirt.io") {
+		return name[strings.LastIndex(name, "/")+1:], nil
+	}
+	if strings.HasPrefix(name, "io.k8s.") {
+		return name, nil
+	}
+	return openapiutil.ToRESTFriendlyName(name), nil
 }
 
 type V3Spec struct {
@@ -63,7 +86,6 @@ func (c *V3Spec) HandleGroupVersion(w http.ResponseWriter, r *http.Request) {
 
 func buildV3Spec(ws *restful.WebService, version string) (*spec3.OpenAPI, error) {
 	config := CreateV3Config()
-	config.GetDefinitions = api.GetOpenAPIDefinitions
 	openapiV3Spec, err := builderv3.BuildOpenAPISpecFromRoutes(
 		restfuladapter.AdaptWebServices([]*restful.WebService{ws}), config)
 	if err != nil {
@@ -109,23 +131,10 @@ func CreateConfig() *common.Config {
 			},
 		},
 		GetDefinitions: func(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
-			m := api.GetOpenAPIDefinitions(ref)
-			for k, v := range m {
-				if _, ok := m[k]; !ok {
-					m[k] = v
-				}
-			}
-			return m
+			return getOpenAPIDefinitions(ref)
 		},
 
-		GetDefinitionName: func(name string) (string, spec.Extensions) {
-			if strings.Contains(name, "kubevirt.io") {
-				// keeping for validation
-				return name[strings.LastIndex(name, "/")+1:], nil
-			}
-			//adpting k8s style
-			return strings.ReplaceAll(name, "/", "."), nil
-		},
+		GetDefinitionName: getDefinitionName,
 	}
 }
 
@@ -164,23 +173,10 @@ func CreateV3Config() *common.OpenAPIV3Config {
 			},
 		},
 		GetDefinitions: func(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
-			m := api.GetOpenAPIDefinitions(ref)
-			for k, v := range m {
-				if _, ok := m[k]; !ok {
-					m[k] = v
-				}
-			}
-			return m
+			return getOpenAPIDefinitions(ref)
 		},
 
-		GetDefinitionName: func(name string) (string, spec.Extensions) {
-			if strings.Contains(name, "kubevirt.io") {
-				// keeping for validation
-				return name[strings.LastIndex(name, "/")+1:], nil
-			}
-			//adpting k8s style
-			return strings.ReplaceAll(name, "/", "."), nil
-		},
+		GetDefinitionName: getDefinitionName,
 	}
 }
 
@@ -205,7 +201,7 @@ func LoadOpenAPISpec(webServices []*restful.WebService) *spec.Swagger {
 		}
 	}
 
-	const resourceQuantityDefinition = "k8s.io.apimachinery.pkg.api.resource.Quantity"
+	const resourceQuantityDefinition = "io.k8s.apimachinery.pkg.api.resource.Quantity"
 
 	quantity, exists := openapispec.Definitions[resourceQuantityDefinition]
 	if exists {

@@ -31,7 +31,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
-	"kubevirt.io/kubevirt/pkg/dra/metadata"
+	metadata "k8s.io/dynamic-resource-allocation/api/metadata"
+	"k8s.io/dynamic-resource-allocation/deviceattribute"
+
 	"kubevirt.io/kubevirt/pkg/network/vmispec"
 	"kubevirt.io/kubevirt/pkg/virt-launcher/virtwrap/device"
 	"kubevirt.io/kubevirt/pkg/virt-launcher/virtwrap/device/hostdevice"
@@ -603,7 +605,7 @@ func writeRawMetadataFile(basePath, claimSubdir, claimName, requestName, metadat
 func writeMetadataFile(basePath, claimSubdir, claimName, requestName, pciAddress string) error {
 	md := metadata.DeviceMetadata{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: metadata.APIVersionV1Alpha1,
+			APIVersion: metadata.SchemeGroupVersion.String(),
 			Kind:       "DeviceMetadata",
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -616,7 +618,7 @@ func writeMetadataFile(basePath, claimSubdir, claimName, requestName, pciAddress
 				Pool:   "pool0",
 				Name:   "dev0",
 				Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
-					metadata.PCIBusIDAttribute: {StringValue: ptr.To(pciAddress)},
+					deviceattribute.StandardDeviceAttributePCIBusID: {StringValue: ptr.To(pciAddress)},
 				},
 			}},
 		}},

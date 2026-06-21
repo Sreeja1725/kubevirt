@@ -119,6 +119,7 @@ var _ = Describe("Application", func() {
 		vmRestoreInformer, _ := testutils.NewFakeInformerFor(&snapshotv1.VirtualMachineRestore{})
 		vmExportInformer, _ := testutils.NewFakeInformerFor(&exportv1.VirtualMachineExport{})
 		configMapInformer, _ := testutils.NewFakeInformerFor(&k8sv1.ConfigMap{})
+		backupCAConfigMapInformer, _ := testutils.NewFakeInformerFor(&k8sv1.ConfigMap{})
 		routeConfigMapInformer, _ := testutils.NewFakeInformerFor(&k8sv1.ConfigMap{})
 		dvInformer, _ := testutils.NewFakeInformerFor(&cdiv1.DataVolume{})
 		exportServiceInformer, _ := testutils.NewFakeInformerFor(&k8sv1.Service{})
@@ -136,7 +137,7 @@ var _ = Describe("Application", func() {
 
 		app.vmiInformer = vmiInformer
 		app.nodeTopologyUpdater = topologyUpdater
-		app.informerFactory = controller.NewKubeInformerFactory(nil, nil, nil, "test")
+		app.informerFactory = controller.NewKubeInformerFactory(nil, virtClient, nil, "test")
 		app.evacuationController, _ = evacuation.NewEvacuationController(vmiInformer, migrationInformer, nodeInformer, podInformer, recorder, virtClient, config)
 		app.disruptionBudgetController, _ = disruptionbudget.NewDisruptionBudgetController(vmiInformer, pdbInformer, podInformer, migrationInformer, recorder, virtClient)
 		app.nodeController, _ = node.NewController(virtClient, nodeInformer, vmiInformer, recorder)
@@ -155,7 +156,7 @@ var _ = Describe("Application", func() {
 			cdiConfigInformer,
 			kvInformer,
 			config,
-			topology.NewTopologyHinter(&cache.FakeCustomStore{}, &cache.FakeCustomStore{}, nil),
+			topology.NewTopologyHinter(cache.NewStore(cache.MetaNamespaceKeyFunc), cache.NewStore(cache.MetaNamespaceKeyFunc), nil),
 			nil,
 			nil,
 			func(_ *v1.VirtualMachineInstance, _ *k8sv1.Pod) error { return nil },
@@ -253,6 +254,7 @@ var _ = Describe("Application", func() {
 			ClusterPreferenceInformer:   clusterPreferenceInformer,
 			ControllerRevisionInformer:  controllerRevisionInformer,
 			VMBackupInformer:            backupInformer,
+			BackupCAConfigMapInformer:   backupCAConfigMapInformer,
 		}
 		_ = app.exportController.Init()
 		app.persistentVolumeClaimInformer = pvcInformer

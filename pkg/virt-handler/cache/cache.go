@@ -225,28 +225,40 @@ func (store *GhostRecordStore) Delete(namespace string, name string) error {
 	return nil
 }
 
+// domainListerWatcher wraps cache.ListWatch and opts out of client-go WatchList
+// semantics. The domain watcher does not stream initial list events or bookmarks.
+type domainListerWatcher struct {
+	cache.ListWatch
+}
+
+func (domainListerWatcher) IsWatchListSemanticsUnSupported() bool {
+	return true
+}
+
 func NewSharedInformer(virtShareDir string, watchdogTimeout int, recorder record.EventRecorder, vmiStore cache.Store, resyncPeriod time.Duration) cache.SharedInformer {
 	consecutiveFails := new(int)
 	runServer := func(ctx context.Context, c chan watch.Event) error {
 		return notifyserver.RunServer(virtShareDir, ctx.Done(), c, recorder, vmiStore)
 	}
-	lw := &cache.ListWatch{
-		ListWithContextFunc: func(_ context.Context, _ metav1.ListOptions) (runtime.Object, error) {
-			log.Log.V(3).Info("Synchronizing domains")
-			domains, err := listAllKnownDomains()
-			if err != nil {
-				return nil, err
-			}
-			list := api.DomainList{
-				Items: []api.Domain{},
-			}
-			for _, domain := range domains {
-				list.Items = append(list.Items, *domain)
-			}
-			return &list, nil
-		},
-		WatchFuncWithContext: func(ctx context.Context, _ metav1.ListOptions) (watch.Interface, error) {
-			return newDomainWatcher(ctx, runServer, watchdogTimeout, resyncPeriod, recorder, consecutiveFails), nil
+	lw := &domainListerWatcher{
+		ListWatch: cache.ListWatch{
+			ListWithContextFunc: func(_ context.Context, _ metav1.ListOptions) (runtime.Object, error) {
+				log.Log.V(3).Info("Synchronizing domains")
+				domains, err := listAllKnownDomains()
+				if err != nil {
+					return nil, err
+				}
+				list := api.DomainList{
+					Items: []api.Domain{},
+				}
+				for _, domain := range domains {
+					list.Items = append(list.Items, *domain)
+				}
+				return &list, nil
+			},
+			WatchFuncWithContext: func(ctx context.Context, _ metav1.ListOptions) (watch.Interface, error) {
+				return newDomainWatcher(ctx, runServer, watchdogTimeout, resyncPeriod, recorder, consecutiveFails), nil
+			},
 		},
 	}
 	return cache.NewSharedInformer(lw, &api.Domain{}, 0)
