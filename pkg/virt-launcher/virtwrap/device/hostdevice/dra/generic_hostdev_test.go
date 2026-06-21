@@ -15,7 +15,8 @@ import (
 
 	v1 "kubevirt.io/api/core/v1"
 
-	"kubevirt.io/kubevirt/pkg/dra/metadata"
+	metadata "k8s.io/dynamic-resource-allocation/api/metadata/v1alpha1"
+	"k8s.io/dynamic-resource-allocation/deviceattribute"
 	"kubevirt.io/kubevirt/pkg/virt-launcher/virtwrap/api"
 )
 
@@ -64,7 +65,7 @@ var _ = Describe("CreateDRAHostDevices", func() {
 			createMetadataFile("claim1", "req1", "device.example.com", &metadata.DeviceMetadata{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "DeviceMetadata",
-					APIVersion: metadata.APIVersionV1Alpha1,
+					APIVersion: metadata.SchemeGroupVersion.String(),
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "claim1",
@@ -76,7 +77,7 @@ var _ = Describe("CreateDRAHostDevices", func() {
 						Pool:   "device-pool",
 						Name:   "device1",
 						Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
-							metadata.PCIBusIDAttribute: {StringValue: &pci},
+							deviceattribute.StandardDeviceAttributePCIBusID: {StringValue: &pci},
 						},
 					}},
 				}},
@@ -119,7 +120,7 @@ var _ = Describe("CreateDRAHostDevices", func() {
 			createMetadataFile("claim1", "req1", "mdev.example.com", &metadata.DeviceMetadata{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "DeviceMetadata",
-					APIVersion: metadata.APIVersionV1Alpha1,
+					APIVersion: metadata.SchemeGroupVersion.String(),
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "claim1",
@@ -131,7 +132,7 @@ var _ = Describe("CreateDRAHostDevices", func() {
 						Pool:   "mdev-pool",
 						Name:   "device1",
 						Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
-							metadata.MDevUUIDAttribute: {StringValue: &uuid},
+							resourcev1.QualifiedName("mdevUUID"): {StringValue: &uuid},
 						},
 					}},
 				}},
@@ -176,7 +177,7 @@ var _ = Describe("CreateDRAHostDevices", func() {
 			createMetadataFile("claim1", "req1", "mdev.example.com", &metadata.DeviceMetadata{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "DeviceMetadata",
-					APIVersion: metadata.APIVersionV1Alpha1,
+					APIVersion: metadata.SchemeGroupVersion.String(),
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "claim1",
@@ -188,7 +189,7 @@ var _ = Describe("CreateDRAHostDevices", func() {
 						Pool:   "mdev-pool",
 						Name:   "device1",
 						Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
-							metadata.MDevUUIDAttribute: {StringValue: &uuid},
+							resourcev1.QualifiedName("mdevUUID"): {StringValue: &uuid},
 						},
 					}},
 				}},
@@ -234,7 +235,7 @@ var _ = Describe("CreateDRAHostDevices", func() {
 			createMetadataFile("claim1", "req1", "device.example.com", &metadata.DeviceMetadata{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "DeviceMetadata",
-					APIVersion: metadata.APIVersionV1Alpha1,
+					APIVersion: metadata.SchemeGroupVersion.String(),
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "claim1",
@@ -246,7 +247,7 @@ var _ = Describe("CreateDRAHostDevices", func() {
 						Pool:   "device-pool",
 						Name:   "device1",
 						Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{
-							metadata.PCIBusIDAttribute: {StringValue: &pci},
+							deviceattribute.StandardDeviceAttributePCIBusID: {StringValue: &pci},
 						},
 					}},
 				}},
