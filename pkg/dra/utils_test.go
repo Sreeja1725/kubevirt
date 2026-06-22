@@ -30,9 +30,11 @@ import (
 
 	resourcev1 "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 
 	"k8s.io/dynamic-resource-allocation/api/metadata"
+	"k8s.io/dynamic-resource-allocation/api/metadata/install"
 	metadatav1alpha1 "k8s.io/dynamic-resource-allocation/api/metadata/v1alpha1"
 	"k8s.io/dynamic-resource-allocation/deviceattribute"
 	v1 "kubevirt.io/api/core/v1"
@@ -42,6 +44,24 @@ const (
 	pciAddr0300 = "0000:03:00.0"
 	pciAddr0400 = "0000:04:00.0"
 )
+
+var metadataV1Alpha1APIVersion = metadatav1alpha1.SchemeGroupVersion.String()
+
+var metadataScheme = func() *runtime.Scheme {
+	s := runtime.NewScheme()
+	install.Install(s)
+	return s
+}()
+
+func marshalDeviceMetadataJSON(md *metadata.DeviceMetadata) ([]byte, error) {
+	var v1md metadatav1alpha1.DeviceMetadata
+	if err := metadataScheme.Convert(md, &v1md, nil); err != nil {
+		return nil, err
+	}
+	v1md.APIVersion = metadataV1Alpha1APIVersion
+	v1md.Kind = "DeviceMetadata"
+	return json.Marshal(&v1md)
+}
 
 var _ = Describe("DownwardAPIAttributes", func() {
 	var tempDir string
@@ -60,9 +80,7 @@ var _ = Describe("DownwardAPIAttributes", func() {
 	// Template claims: {base}/resourceclaimtemplates/{podClaimName}/{requestName}/{driverName}-metadata.json
 	writeMetadataJSON := func(dir, driverName string, md *metadata.DeviceMetadata) {
 		Expect(os.MkdirAll(dir, 0o755)).To(Succeed())
-		md.APIVersion = metadatav1alpha1.SchemeGroupVersion.String()
-		md.Kind = "DeviceMetadata"
-		data, err := json.Marshal(md)
+		data, err := marshalDeviceMetadataJSON(md)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(os.WriteFile(filepath.Join(dir, driverName+metadata.MetadataFileSuffix), data, 0o600)).To(Succeed())
 	}
@@ -563,8 +581,7 @@ var _ = Describe("DownwardAPIAttributes", func() {
 		It("should skip unknown apiVersion and decode v1alpha1 from stream", func() {
 			pciAddr := "0000:07:00.0"
 			v2Obj := `{"apiVersion":"metadata.resource.k8s.io/v2beta1","kind":"DeviceMetadata","metadata":{"name":"claim1"},"newField":"ignored"}`
-			v1Obj, err := json.Marshal(&metadata.DeviceMetadata{
-				TypeMeta:   metav1.TypeMeta{APIVersion: metadata.SchemeGroupVersion.Version, Kind: "DeviceMetadata"},
+			v1Obj, err := marshalDeviceMetadataJSON(&metadata.DeviceMetadata{
 				ObjectMeta: metav1.ObjectMeta{Name: "claim1"},
 				Requests: []metadata.DeviceMetadataRequest{{
 					Name: "req1",
@@ -618,8 +635,7 @@ var _ = Describe("DownwardAPIAttributes", func() {
 
 		It("should fail if an entry's apiVersion cannot be peeked even when a later entry is valid", func() {
 			pciAddr := "0000:0a:00.0"
-			v1Obj, err := json.Marshal(&metadata.DeviceMetadata{
-				TypeMeta:   metav1.TypeMeta{APIVersion: metadata.SchemeGroupVersion.Version, Kind: "DeviceMetadata"},
+			v1Obj, err := marshalDeviceMetadataJSON(&metadata.DeviceMetadata{
 				ObjectMeta: metav1.ObjectMeta{Name: "claim4"},
 				Requests: []metadata.DeviceMetadataRequest{{
 					Name: "req1",
@@ -649,10 +665,9 @@ var _ = Describe("DownwardAPIAttributes", func() {
 			pciAddr := "0000:0b:00.0"
 			badV1 := fmt.Sprintf(
 				`{"apiVersion":%q,"kind":"DeviceMetadata","metadata":{"name":"claim5"},"requests":"this-should-be-an-array"}`,
-				metadata.SchemeGroupVersion.Version,
+				metadataV1Alpha1APIVersion,
 			)
-			goodV1, err := json.Marshal(&metadata.DeviceMetadata{
-				TypeMeta:   metav1.TypeMeta{APIVersion: metadata.SchemeGroupVersion.Version, Kind: "DeviceMetadata"},
+			goodV1, err := marshalDeviceMetadataJSON(&metadata.DeviceMetadata{
 				ObjectMeta: metav1.ObjectMeta{Name: "claim5"},
 				Requests: []metadata.DeviceMetadataRequest{{
 					Name: "req1",
@@ -672,7 +687,7 @@ var _ = Describe("DownwardAPIAttributes", func() {
 			}}
 			_, err = GetPCIAddressForClaim(tempDir, resourceClaims, "my-claim", "req1")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("decode %s", metadata.SchemeGroupVersion.Version)))
+			Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("decode %s", metadataV1Alpha1APIVersion)))
 		})
 	})
 })

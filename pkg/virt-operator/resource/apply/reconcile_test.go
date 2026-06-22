@@ -57,8 +57,10 @@ func (m *MockStore) Get(_ interface{}) (item interface{}, exists bool, err error
 func (m *MockStore) GetByKey(_ string) (item interface{}, exists bool, err error) {
 	return nil, false, nil
 }
-func (m *MockStore) Replace([]interface{}, string) error { return nil }
-func (m *MockStore) Resync() error                       { return nil }
+func (m *MockStore) Replace([]interface{}, string) error  { return nil }
+func (m *MockStore) Resync() error                        { return nil }
+func (m *MockStore) LastStoreSyncResourceVersion() string { return "" }
+func (m *MockStore) Bookmark(_ string)                    { return }
 
 const (
 	Namespace = "ns"
