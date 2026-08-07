@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/emicklei/go-restful/v3"
 
@@ -53,11 +54,13 @@ func (app *SubresourceAPIApp) VMRemoveVolumeRequestHandler(request *restful.Requ
 // VMIAddVolumeRequestHandler handles the subresource for hot plugging a volume and disk.
 func (app *SubresourceAPIApp) VMIAddVolumeRequestHandler(request *restful.Request, response *restful.Response) {
 	app.addVolumeRequestHandler(request, response, true)
+	fmt.Println("VMIAddVolumeRequestHandler end time", time.Now().Format(time.RFC3339))
 }
 
 // VMIRemoveVolumeRequestHandler handles the subresource for hot plugging a volume and disk.
 func (app *SubresourceAPIApp) VMIRemoveVolumeRequestHandler(request *restful.Request, response *restful.Response) {
 	app.removeVolumeRequestHandler(request, response, true)
+	fmt.Println("VMIRemoveVolumeRequestHandler end time", time.Now().Format(time.RFC3339))
 }
 
 func (app *SubresourceAPIApp) hotplugVolumesEnabled() bool {
@@ -69,6 +72,7 @@ func (app *SubresourceAPIApp) ephemeralHotplugSupported() bool {
 }
 
 func (app *SubresourceAPIApp) addVolumeRequestHandler(request *restful.Request, response *restful.Response, ephemeral bool) {
+	fmt.Println("addVolumeRequestHandler", time.Now().Format(time.RFC3339))
 	name := request.PathParameter("name")
 	namespace := request.PathParameter("namespace")
 
@@ -132,6 +136,7 @@ func (app *SubresourceAPIApp) addVolumeRequestHandler(request *restful.Request, 
 }
 
 func (app *SubresourceAPIApp) removeVolumeRequestHandler(request *restful.Request, response *restful.Response, ephemeral bool) {
+	fmt.Println("removeVolumeRequestHandler", time.Now().Format(time.RFC3339))
 	name := request.PathParameter("name")
 	namespace := request.PathParameter("namespace")
 

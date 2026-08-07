@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"sync"
 	"syscall"
+	"time"
 
 	"kubevirt.io/kubevirt/pkg/checkpoint"
 	"kubevirt.io/kubevirt/pkg/unsafepath"
@@ -377,6 +378,7 @@ func (m *volumeMounter) mountFromPod(vmi *v1.VirtualMachineInstance, sourceUID t
 		if volumeSourceUID == "" {
 			volumeSourceUID = volumeStatus.HotplugVolume.AttachPodUID
 		}
+		fmt.Println("mountHotplugVolume start time", time.Now().Format(time.RFC3339))
 		if err := m.mountHotplugVolume(vmi, volumeStatus.Name, volumeSourceUID, record, mountDirectory, cgroupManager); err != nil {
 			return err
 		}

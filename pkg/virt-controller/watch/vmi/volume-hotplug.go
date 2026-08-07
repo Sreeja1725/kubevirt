@@ -220,6 +220,7 @@ func (c *Controller) handleHotplugVolumes(hotplugVolumes []*v1.Volume, hotplugAt
 			}
 			c.Queue.AddAfter(key, waitTime)
 		} else {
+			fmt.Println("create attachment pod start time", time.Now().Format(time.RFC3339))
 			if newPod, err := c.createAttachmentPod(vmi, virtLauncherPod, readyHotplugVolumes); err != nil {
 				return err
 			} else {

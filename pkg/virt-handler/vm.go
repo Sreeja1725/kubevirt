@@ -2251,6 +2251,7 @@ func (c *VirtualMachineController) hotplugVolumesReady(vmi *v1.VirtualMachineIns
 			return false
 		}
 	}
+	fmt.Println("hotplugVolumesReady end time", time.Now().Format(time.RFC3339))
 	return true
 }
 
