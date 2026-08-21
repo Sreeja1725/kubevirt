@@ -42,6 +42,7 @@ const (
 type fakeConfigChecker struct {
 	gpuDRAEnabled        bool
 	hostDeviceDRAEnabled bool
+	cpuDRAEnabled        bool
 }
 
 func resourceClaim(name string) v1.VirtualMachineInstanceResourceClaim {
@@ -124,12 +125,29 @@ func hostDeviceSpec(resourceClaims []v1.VirtualMachineInstanceResourceClaim, hos
 	}
 }
 
+func cpuSpec(resourceClaims []v1.VirtualMachineInstanceResourceClaim, dra []v1.ClaimRequest) *v1.VirtualMachineInstanceSpec {
+	return &v1.VirtualMachineInstanceSpec{
+		ResourceClaims: resourceClaims,
+		Domain: v1.DomainSpec{
+			CPU: &v1.CPU{
+				CPUSource: v1.CPUSource{
+					DRA: dra,
+				},
+			},
+		},
+	}
+}
+
 func (f *fakeConfigChecker) GPUsWithDRAGateEnabled() bool {
 	return f.gpuDRAEnabled
 }
 
 func (f *fakeConfigChecker) HostDevicesWithDRAEnabled() bool {
 	return f.hostDeviceDRAEnabled
+}
+
+func (f *fakeConfigChecker) CPUsWithDRAGateEnabled() bool {
+	return f.cpuDRAEnabled
 }
 
 func (f *fakeConfigChecker) NetworkDevicesWithDRAGateEnabled() bool {
@@ -363,6 +381,13 @@ var _ = Describe("DRA Admitter", func() {
 			},
 			"spec.domain.devices.hostDevices[0]",
 		),
+		Entry("CPU",
+			func() { checker.cpuDRAEnabled = true },
+			func(claimRequest *v1.ClaimRequest) *v1.VirtualMachineInstanceSpec {
+				return cpuSpec([]v1.VirtualMachineInstanceResourceClaim{resourceClaim(claim1)}, []v1.ClaimRequest{*claimRequest})
+			},
+			"spec.domain.cpu.dra[0]",
+		),
 	)
 
 	DescribeTable("DRA device with empty requestName",
@@ -395,6 +420,13 @@ var _ = Describe("DRA Admitter", func() {
 			},
 			"spec.domain.devices.hostDevices[0]",
 		),
+		Entry("CPU",
+			func() { checker.cpuDRAEnabled = true },
+			func(claimRequest *v1.ClaimRequest) *v1.VirtualMachineInstanceSpec {
+				return cpuSpec([]v1.VirtualMachineInstanceResourceClaim{resourceClaim(claim1)}, []v1.ClaimRequest{*claimRequest})
+			},
+			"spec.domain.cpu.dra[0]",
+		),
 	)
 
 	DescribeTable("DRA device with empty claimName and requestName",
@@ -425,6 +457,13 @@ var _ = Describe("DRA Admitter", func() {
 				})
 			},
 			"spec.domain.devices.hostDevices[0]",
+		),
+		Entry("CPU",
+			func() { checker.cpuDRAEnabled = true },
+			func(claimRequest *v1.ClaimRequest) *v1.VirtualMachineInstanceSpec {
+				return cpuSpec([]v1.VirtualMachineInstanceResourceClaim{resourceClaim(claim1)}, []v1.ClaimRequest{*claimRequest})
+			},
+			"spec.domain.cpu.dra[0]",
 		),
 	)
 
@@ -556,6 +595,22 @@ var _ = Describe("DRA Admitter", func() {
 				)
 			},
 			"spec.domain.devices.hostDevices[1]",
+		),
+		Entry("CPU",
+			func() { checker.cpuDRAEnabled = true },
+			func() *v1.VirtualMachineInstanceSpec {
+				return cpuSpec([]v1.VirtualMachineInstanceResourceClaim{resourceClaim(claim1)}, []v1.ClaimRequest{*claimRequest(claim1, req1)})
+			},
+			func(
+				resourceClaims []v1.VirtualMachineInstanceResourceClaim,
+				firstClaim string,
+				firstRequest string,
+				secondClaim string,
+				secondRequest string,
+			) *v1.VirtualMachineInstanceSpec {
+				return cpuSpec(resourceClaims, []v1.ClaimRequest{*claimRequest(firstClaim, firstRequest), *claimRequest(secondClaim, secondRequest)})
+			},
+			"spec.domain.cpu.dra[1]",
 		),
 	)
 
@@ -913,6 +968,78 @@ var _ = Describe("DRA Admitter", func() {
 				Message: "duplicate claimName/requestName pair \"shared-claim/shared-req\" between GPUs[0] and HostDevices[0]",
 				Field:   "spec.domain.devices.hostDevices[0]",
 			}}))
+		})
+	})
+
+	Context("DRA CPU", func() {
+		It("should reject DRA CPU when the feature gate is not enabled", func() {
+			spec := cpuSpec(nil, []v1.ClaimRequest{*claimRequest(claim1, req1)})
+			causes := validateCreationDRA(field, spec, checker)
+			Expect(causes).To(ContainElement(metav1.StatusCause{
+				Type:    metav1.CauseTypeFieldValueInvalid,
+				Message: "vmi.spec.domain.cpu.dra is set but CPUsWithDRA feature gate is not enabled",
+				Field:   "spec.domain.cpu.dra",
+			}))
+		})
+
+		It("should reject when both dedicatedCpuPlacement and dra are set", func() {
+			checker.cpuDRAEnabled = true
+			spec := cpuSpec([]v1.VirtualMachineInstanceResourceClaim{resourceClaim(claim1)}, []v1.ClaimRequest{*claimRequest(claim1, req1)})
+			spec.Domain.CPU.DedicatedCPUPlacement = true
+			causes := validateCreationDRA(field, spec, checker)
+			Expect(causes).To(ContainElement(metav1.StatusCause{
+				Type:    metav1.CauseTypeFieldValueInvalid,
+				Message: "vmi.spec.domain.cpu.dra cannot be used with vmi.spec.domain.cpu.dedicatedCpuPlacement; they are mutually exclusive",
+				Field:   "spec.domain.cpu",
+			}))
+		})
+
+		It("should reject when CPU claimName is not listed in spec.resourceClaims", func() {
+			checker.cpuDRAEnabled = true
+			spec := cpuSpec(
+				[]v1.VirtualMachineInstanceResourceClaim{resourceClaim("other-claim")},
+				[]v1.ClaimRequest{*claimRequest(claim1, req1)},
+			)
+			causes := validateCreationDRA(field, spec, checker)
+			Expect(causes).To(ContainElement(metav1.StatusCause{
+				Type:    metav1.CauseTypeFieldValueInvalid,
+				Message: "vmi.spec.resourceClaims must specify all claims used in vmi.spec.domain.devices.gpus, vmi.spec.domain.devices.hostDevices, and vmi.spec.domain.cpu.dra",
+				Field:   "spec.resourceClaims",
+			}))
+		})
+
+		It("should reject duplicate claimName/requestName between DRA CPU and DRA GPU", func() {
+			checker.gpuDRAEnabled = true
+			checker.cpuDRAEnabled = true
+			spec := &v1.VirtualMachineInstanceSpec{
+				ResourceClaims: []v1.VirtualMachineInstanceResourceClaim{resourceClaim(claim1)},
+				Domain: v1.DomainSpec{
+					CPU: &v1.CPU{
+						CPUSource: v1.CPUSource{
+							DRA: []v1.ClaimRequest{*claimRequest(claim1, req1)},
+						},
+					},
+					Devices: v1.Devices{
+						GPUs: []v1.GPU{gpuWithClaimRequest("gpu1", claim1, req1)},
+					},
+				},
+			}
+			causes := validateCreationDRA(field, spec, checker)
+			Expect(causes).To(Equal([]metav1.StatusCause{{
+				Type:    metav1.CauseTypeFieldValueDuplicate,
+				Message: "duplicate claimName/requestName pair \"claim1/req1\" between GPUs[0] and CPU[0]",
+				Field:   "spec.domain.cpu.dra[0]",
+			}}))
+		})
+
+		It("should accept multiple DRA CPU requests from the same claim", func() {
+			checker.cpuDRAEnabled = true
+			spec := cpuSpec(
+				[]v1.VirtualMachineInstanceResourceClaim{resourceClaim(claim1)},
+				[]v1.ClaimRequest{*claimRequest(claim1, req1), *claimRequest(claim1, req2)},
+			)
+			causes := validateCreationDRA(field, spec, checker)
+			Expect(causes).To(BeEmpty())
 		})
 	})
 

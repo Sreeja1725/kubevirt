@@ -4163,6 +4163,135 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 			Expect(resp.Allowed).To(BeTrue(), fmt.Sprint(resp.Result))
 		})
 	})
+
+	Context("with DRA CPUs", func() {
+		const cpuClaimName = "my-cpu-claim"
+
+		withDRACPU := func(vmi *v1.VirtualMachineInstance, requests ...v1.ClaimRequest) *v1.VirtualMachineInstance {
+			vmi.Spec.Domain.CPU = &v1.CPU{
+				CPUSource: v1.CPUSource{
+					DRA: requests,
+				},
+			}
+			return vmi
+		}
+
+		It("should reject a DRA CPU when the feature gate is NOT enabled", func() {
+			kvConfig := kv.DeepCopy()
+			kvConfig.Spec.Configuration.DeveloperConfiguration.DisabledFeatureGates = []string{featuregate.CPUsWithDRAGate}
+			testutils.UpdateFakeKubeVirtClusterConfig(kvStore, kvConfig)
+			defer disableFeatureGates()
+
+			vmi := withDRACPU(libvmi.New(), v1.ClaimRequest{
+				ClaimName:   cpuClaimName,
+				RequestName: "numa-0",
+			})
+			vmi.Spec.ResourceClaims = []v1.VirtualMachineInstanceResourceClaim{{
+				Name:              cpuClaimName,
+				ResourceClaimName: pointer.P(cpuClaimName),
+			}}
+
+			ar, err := newAdmissionReviewForVMICreation(vmi)
+			Expect(err).ToNot(HaveOccurred())
+
+			resp := vmiCreateAdmitter.Admit(context.Background(), ar)
+			Expect(resp.Allowed).To(BeFalse())
+			Expect(resp.Result.Message).To(ContainSubstring("CPUsWithDRA feature gate is not enabled"))
+		})
+
+		It("should reject a DRA CPU if its claim is missing from spec.resourceClaims", func() {
+			enableFeatureGates(featuregate.CPUsWithDRAGate)
+
+			vmi := withDRACPU(libvmi.New(), v1.ClaimRequest{
+				ClaimName:   cpuClaimName,
+				RequestName: "numa-0",
+			})
+
+			ar, err := newAdmissionReviewForVMICreation(vmi)
+			Expect(err).ToNot(HaveOccurred())
+
+			resp := vmiCreateAdmitter.Admit(context.Background(), ar)
+			Expect(resp.Allowed).To(BeFalse())
+			Expect(resp.Result.Message).To(ContainSubstring("vmi.spec.resourceClaims must specify all claims"))
+		})
+
+		It("should reject when both dedicatedCpuPlacement and dra are set", func() {
+			enableFeatureGates(featuregate.CPUsWithDRAGate)
+
+			vmi := withDRACPU(libvmi.New(), v1.ClaimRequest{
+				ClaimName:   cpuClaimName,
+				RequestName: "numa-0",
+			})
+			vmi.Spec.ResourceClaims = []v1.VirtualMachineInstanceResourceClaim{{
+				Name:              cpuClaimName,
+				ResourceClaimName: pointer.P(cpuClaimName),
+			}}
+			vmi.Spec.Domain.CPU.DedicatedCPUPlacement = true
+
+			ar, err := newAdmissionReviewForVMICreation(vmi)
+			Expect(err).ToNot(HaveOccurred())
+
+			resp := vmiCreateAdmitter.Admit(context.Background(), ar)
+			Expect(resp.Allowed).To(BeFalse())
+			Expect(resp.Result.Message).To(ContainSubstring("dedicatedCpuPlacement; they are mutually exclusive"))
+		})
+
+		It("should reject duplicate claimName/requestName between DRA CPU and DRA GPU", func() {
+			enableFeatureGates(featuregate.CPUsWithDRAGate, featuregate.GPUsWithDRAGate)
+
+			vmi := libvmi.New(
+				libvmi.WithArchitecture(runtime.GOARCH),
+				libvmi.WithMemoryRequest("128M"),
+				libvmi.WithResourceClaim(v1.VirtualMachineInstanceResourceClaim{
+					Name:              cpuClaimName,
+					ResourceClaimName: pointer.P(cpuClaimName),
+				}),
+			)
+			vmi = withDRACPU(vmi, v1.ClaimRequest{
+				ClaimName:   cpuClaimName,
+				RequestName: "shared-req",
+			})
+			vmi.Spec.Domain.Devices.GPUs = []v1.GPU{{
+				Name: "gpu",
+				ClaimRequest: &v1.ClaimRequest{
+					ClaimName:   cpuClaimName,
+					RequestName: "shared-req",
+				},
+			}}
+
+			ar, err := newAdmissionReviewForVMICreation(vmi)
+			Expect(err).ToNot(HaveOccurred())
+
+			resp := vmiCreateAdmitter.Admit(context.Background(), ar)
+			Expect(resp.Allowed).To(BeFalse())
+			Expect(resp.Result.Message).To(ContainSubstring("duplicate claimName/requestName pair"))
+		})
+
+		It("should accept a DRA CPU when the gate is enabled and the claim is listed", func() {
+			enableFeatureGates(featuregate.CPUsWithDRAGate)
+
+			vmi := withDRACPU(libvmi.New(
+				libvmi.WithArchitecture(runtime.GOARCH),
+				libvmi.WithMemoryRequest("128M"),
+			), v1.ClaimRequest{
+				ClaimName:   cpuClaimName,
+				RequestName: "numa-0",
+			}, v1.ClaimRequest{
+				ClaimName:   cpuClaimName,
+				RequestName: "numa-1",
+			})
+			vmi.Spec.ResourceClaims = []v1.VirtualMachineInstanceResourceClaim{{
+				Name:              cpuClaimName,
+				ResourceClaimName: pointer.P(cpuClaimName),
+			}}
+
+			ar, err := newAdmissionReviewForVMICreation(vmi)
+			Expect(err).ToNot(HaveOccurred())
+
+			resp := vmiCreateAdmitter.Admit(context.Background(), ar)
+			Expect(resp.Allowed).To(BeTrue(), fmt.Sprint(resp.Result))
+		})
+	})
 })
 
 var _ = Describe("additional tests", func() {
