@@ -1214,8 +1214,10 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 				SupplementalPoolThreadCount: pointer.P(uint32(0)),
 			}
 			vmi.Spec.Domain.CPU = &v1.CPU{
-				Cores:                 2,
-				DedicatedCPUPlacement: true,
+				Cores: 2,
+				CPUSource: v1.CPUSource{
+					DedicatedCPUPlacement: true,
+				},
 				IsolateEmulatorThread: true,
 			}
 			causes := ValidateVirtualMachineInstanceSpec(k8sfield.NewPath("spec"), &vmi.Spec, config)
@@ -1849,7 +1851,9 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 
 		It("should reject specs with IsolateEmulatorThread without DedicatedCPUPlacement set", func() {
 			vmi.Spec.Domain.CPU = &v1.CPU{
-				DedicatedCPUPlacement: false,
+				CPUSource: v1.CPUSource{
+					DedicatedCPUPlacement: false,
+				},
 				IsolateEmulatorThread: true,
 			}
 			causes := ValidateVirtualMachineInstanceSpec(k8sfield.NewPath("fake"), &vmi.Spec, config)

@@ -571,7 +571,7 @@ var _ = Describe("VirtualMachineInstance migration target", func() {
 				testutils.ExpectEvent(recorder, VMIMigrating)
 			},
 				Entry("if CPU is limited", k8sv1.ResourceList{k8sv1.ResourceCPU: resource.MustParse("4")}, nil),
-				Entry("if CPU is dedicated", nil, &v1.CPU{DedicatedCPUPlacement: true, Cores: 2, Sockets: 1, Threads: 1}),
+				Entry("if CPU is dedicated", nil, &v1.CPU{CPUSource: v1.CPUSource{DedicatedCPUPlacement: true}, Cores: 2, Sockets: 1, Threads: 1}),
 			)
 		})
 	})

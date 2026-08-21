@@ -201,10 +201,12 @@ func initFedoraIsolated(spec *v1.VirtualMachineInstanceSpec) *v1.VirtualMachineI
 func addDedicatedAndIsolatedCPU(spec *v1.VirtualMachineInstanceSpec) *v1.VirtualMachineInstanceSpec {
 	cpu := &v1.CPU{
 		IsolateEmulatorThread: true,
-		DedicatedCPUPlacement: true,
-		Sockets:               1,
-		Cores:                 1,
-		Threads:               1,
+		CPUSource: v1.CPUSource{
+			DedicatedCPUPlacement: true,
+		},
+		Sockets: 1,
+		Cores:   1,
+		Threads: 1,
 	}
 	spec.Domain.CPU = cpu
 	return spec

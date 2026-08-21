@@ -1544,8 +1544,10 @@ var _ = Describe("migratableDomXML", func() {
 
 		vmi := newVMI("testns", "kubevirt")
 		vmi.Spec.Domain.CPU = &v1.CPU{
-			Cores:                 2,
-			DedicatedCPUPlacement: true,
+			Cores: 2,
+			CPUSource: v1.CPUSource{
+				DedicatedCPUPlacement: true,
+			},
 		}
 
 		mockLibvirt.DomainEXPECT().GetXMLDesc(libvirt.DOMAIN_XML_MIGRATABLE).MaxTimes(1).Return(domXML, nil)

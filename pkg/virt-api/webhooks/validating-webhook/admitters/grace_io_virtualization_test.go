@@ -69,7 +69,11 @@ var _ = Describe("GraceIOVirtualization admission", func() {
 			Architecture: "arm64",
 			Domain: v1.DomainSpec{
 				Machine: &v1.Machine{Type: "virt"},
-				CPU:     &v1.CPU{DedicatedCPUPlacement: true},
+				CPU: &v1.CPU{
+					CPUSource: v1.CPUSource{
+						DedicatedCPUPlacement: true,
+					},
+				},
 				Devices: v1.Devices{
 					GPUs: []v1.GPU{
 						{

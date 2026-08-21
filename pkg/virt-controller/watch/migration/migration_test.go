@@ -453,10 +453,12 @@ var _ = Describe("Migration watcher", func() {
 			It("should annotate VMI with dedicated CPU limits", func() {
 				vmi.Spec.Domain = v1.DomainSpec{
 					CPU: &v1.CPU{
-						DedicatedCPUPlacement: true,
-						Cores:                 2,
-						Sockets:               1,
-						Threads:               1,
+						CPUSource: v1.CPUSource{
+							DedicatedCPUPlacement: true,
+						},
+						Cores:   2,
+						Sockets: 1,
+						Threads: 1,
 					},
 				}
 				vmi.Status.Conditions = append(vmi.Status.Conditions,

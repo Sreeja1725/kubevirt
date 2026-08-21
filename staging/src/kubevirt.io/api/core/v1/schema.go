@@ -371,10 +371,11 @@ type CPU struct {
 	// Features specifies the CPU features list inside the VMI.
 	// +optional
 	Features []CPUFeature `json:"features,omitempty"`
-	// DedicatedCPUPlacement requests the scheduler to place the VirtualMachineInstance on a node
-	// with enough dedicated pCPUs and pin the vCPUs to it.
-	// +optional
-	DedicatedCPUPlacement bool `json:"dedicatedCpuPlacement,omitempty"`
+
+	// CPUSource selects how exclusive host CPUs are obtained.
+	// At most one of DedicatedCPUPlacement or DRA may be set.
+	// Both unset is valid (non-exclusive CPUs).
+	CPUSource `json:",inline"`
 
 	// NUMA allows specifying settings for the guest NUMA topology
 	// +optional
@@ -387,6 +388,20 @@ type CPU struct {
 	// Realtime instructs the virt-launcher to tune the VMI for lower latency, optional for real time workloads
 	// +optional
 	Realtime *Realtime `json:"realtime,omitempty"`
+}
+
+type CPUSource struct {
+	// DedicatedCPUPlacement requests the scheduler to place the VirtualMachineInstance on a node
+	// with enough dedicated pCPUs and pin the vCPUs to it.
+	// +optional
+	DedicatedCPUPlacement bool `json:"dedicatedCpuPlacement,omitempty"`
+
+	// DRA requests exclusive / topology-aware CPUs via a ResourceClaim
+	// listed in vmi.spec.resourceClaims[]. This is the DRA alternative
+	// to DedicatedCPUPlacement. Requires the CPUsWithDRA feature gate.
+	// +optional
+	// +listType=atomic
+	DRA []ClaimRequest `json:"dra,omitempty"`
 }
 
 // Realtime holds the tuning knobs specific for realtime workloads.

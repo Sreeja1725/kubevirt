@@ -1086,8 +1086,10 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 			It("[test_id:991]should be scheduled on a node with running cpu manager", func() {
 				cpuVmi := libvmifact.NewAlpine()
 				cpuVmi.Spec.Domain.CPU = &v1.CPU{
-					Cores:                 2,
-					DedicatedCPUPlacement: true,
+					Cores: 2,
+					CPUSource: v1.CPUSource{
+						DedicatedCPUPlacement: true,
+					},
 				}
 
 				By("Starting a VirtualMachineInstance")
@@ -1173,8 +1175,10 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 			DescribeTable("[test_id:4023]should start a vmi with dedicated cpus and isolated emulator thread", decorators.RequiresAMD64, func(resources *v1.ResourceRequirements) {
 				cpuVmi := libvmifact.NewAlpine()
 				cpuVmi.Spec.Domain.CPU = &v1.CPU{
-					Cores:                 2,
-					DedicatedCPUPlacement: true,
+					Cores: 2,
+					CPUSource: v1.CPUSource{
+						DedicatedCPUPlacement: true,
+					},
 					IsolateEmulatorThread: true,
 				}
 				if resources != nil {
@@ -1282,7 +1286,9 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 			It("[test_id:802]should configure correct number of vcpus with requests.cpus", func() {
 				cpuVmi := libvmifact.NewAlpine()
 				cpuVmi.Spec.Domain.CPU = &v1.CPU{
-					DedicatedCPUPlacement: true,
+					CPUSource: v1.CPUSource{
+						DedicatedCPUPlacement: true,
+					},
 				}
 				cpuVmi.Spec.Domain.Resources.Requests[k8sv1.ResourceCPU] = resource.MustParse("2")
 
@@ -1305,7 +1311,9 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 			It("[test_id:1690]should fail the vmi creation if Guaranteed QOS cannot be set", func() {
 				cpuVmi := libvmifact.NewAlpine()
 				cpuVmi.Spec.Domain.CPU = &v1.CPU{
-					DedicatedCPUPlacement: true,
+					CPUSource: v1.CPUSource{
+						DedicatedCPUPlacement: true,
+					},
 				}
 				cpuVmi.Spec.Domain.Resources.Requests[k8sv1.ResourceCPU] = resource.MustParse("2")
 				cpuVmi.Spec.Domain.Resources = v1.ResourceRequirements{
@@ -1321,7 +1329,9 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 				Vmi := libvmifact.NewAlpine()
 				cpuVmi := libvmifact.NewAlpine()
 				cpuVmi.Spec.Domain.CPU = &v1.CPU{
-					DedicatedCPUPlacement: true,
+					CPUSource: v1.CPUSource{
+						DedicatedCPUPlacement: true,
+					},
 				}
 
 				cpuVmi.Spec.Domain.Resources.Requests[k8sv1.ResourceCPU] = resource.MustParse("2")

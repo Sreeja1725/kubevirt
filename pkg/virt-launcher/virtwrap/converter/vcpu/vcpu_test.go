@@ -185,10 +185,12 @@ var _ = Describe("VCPU pinning", func() {
 				Spec: corev1.VirtualMachineInstanceSpec{
 					Domain: corev1.DomainSpec{
 						CPU: &corev1.CPU{
-							Cores:                 1,
-							Sockets:               8,
-							Threads:               1,
-							DedicatedCPUPlacement: true,
+							Cores:   1,
+							Sockets: 8,
+							Threads: 1,
+							CPUSource: corev1.CPUSource{
+								DedicatedCPUPlacement: true,
+							},
 						},
 						Devices: corev1.Devices{
 							Disks: []corev1.Disk{{
@@ -239,11 +241,13 @@ var _ = Describe("VCPU pinning", func() {
 				Spec: corev1.VirtualMachineInstanceSpec{
 					Domain: corev1.DomainSpec{
 						CPU: &corev1.CPU{
-							Sockets:               1,
-							Cores:                 1,
-							Threads:               1,
-							MaxSockets:            2,
-							DedicatedCPUPlacement: true,
+							Sockets:    1,
+							Cores:      1,
+							Threads:    1,
+							MaxSockets: 2,
+							CPUSource: corev1.CPUSource{
+								DedicatedCPUPlacement: true,
+							},
 						},
 					},
 				},

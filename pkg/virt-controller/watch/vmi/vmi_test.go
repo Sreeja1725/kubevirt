@@ -49,6 +49,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 
+	v1 "kubevirt.io/api/core/v1"
 	virtv1 "kubevirt.io/api/core/v1"
 	"kubevirt.io/client-go/api"
 	"kubevirt.io/client-go/kubecli"
@@ -1684,7 +1685,11 @@ var _ = Describe("VirtualMachineInstance watcher", func() {
 			vmi := newPendingVirtualMachine("testvmi")
 			setReadyCondition(vmi, k8sv1.ConditionFalse, virtv1.GuestNotRunningReason)
 			vmi.Status.Phase = virtv1.Scheduling
-			vmi.Spec.Domain.CPU = &virtv1.CPU{DedicatedCPUPlacement: true}
+			vmi.Spec.Domain.CPU = &virtv1.CPU{
+				CPUSource: v1.CPUSource{
+					DedicatedCPUPlacement: true,
+				},
+			}
 			pod := newPodForVirtualMachine(vmi, k8sv1.PodRunning)
 			pod.Spec = k8sv1.PodSpec{
 				Containers: []k8sv1.Container{

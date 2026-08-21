@@ -221,10 +221,12 @@ func setupMockHardwarePaths(testDevices map[string]string, numaCPUMap map[string
 func configureNUMAAwareVMI(vmi *v1.VirtualMachineInstance, cores uint32, memory string, hostDevices []v1.HostDevice, gpus []v1.GPU) {
 	// Configure CPU with NUMA passthrough
 	vmi.Spec.Domain.CPU = &v1.CPU{
-		Cores:                 cores,
-		Sockets:               1,
-		Threads:               1,
-		DedicatedCPUPlacement: true,
+		Cores:   cores,
+		Sockets: 1,
+		Threads: 1,
+		CPUSource: v1.CPUSource{
+			DedicatedCPUPlacement: true,
+		},
 		NUMA: &v1.NUMA{
 			GuestMappingPassthrough: &v1.NUMAGuestMappingPassthrough{},
 		},
@@ -3009,7 +3011,11 @@ var _ = Describe("Converter", func() {
 				},
 				Spec: v1.VirtualMachineInstanceSpec{
 					Domain: v1.DomainSpec{
-						CPU: &v1.CPU{DedicatedCPUPlacement: true},
+						CPU: &v1.CPU{
+							CPUSource: v1.CPUSource{
+								DedicatedCPUPlacement: true,
+							},
+						},
 						Resources: v1.ResourceRequirements{
 							Requests: k8sv1.ResourceList{
 								k8sv1.ResourceMemory: resource.MustParse("64M"),
@@ -3189,11 +3195,13 @@ var _ = Describe("Converter", func() {
 			}
 			v1.SetObjectDefaults_VirtualMachineInstance(vmi)
 			vmi.Spec.Domain.CPU = &v1.CPU{
-				Cores:                 2,
-				Sockets:               1,
-				Threads:               1,
-				Realtime:              &v1.Realtime{},
-				DedicatedCPUPlacement: true,
+				Cores:    2,
+				Sockets:  1,
+				Threads:  1,
+				Realtime: &v1.Realtime{},
+				CPUSource: v1.CPUSource{
+					DedicatedCPUPlacement: true,
+				},
 			}
 		})
 		It("should configure the VCPU scheduler information utilizing all pinned vcpus when realtime is enabled", func() {

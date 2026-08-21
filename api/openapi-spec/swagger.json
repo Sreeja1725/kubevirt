@@ -14015,6 +14015,15 @@
       "description": "DedicatedCPUPlacement requests the scheduler to place the VirtualMachineInstance on a node with enough dedicated pCPUs and pin the vCPUs to it.",
       "type": "boolean"
      },
+     "dra": {
+      "description": "DRA requests exclusive / topology-aware CPUs via a ResourceClaim listed in vmi.spec.resourceClaims[]. This is the DRA alternative to DedicatedCPUPlacement. Requires the CPUsWithDRA feature gate.",
+      "type": "array",
+      "items": {
+       "default": {},
+       "$ref": "#/definitions/v1.ClaimRequest"
+      },
+      "x-kubernetes-list-type": "atomic"
+     },
      "features": {
       "description": "Features specifies the CPU features list inside the VMI.",
       "type": "array",

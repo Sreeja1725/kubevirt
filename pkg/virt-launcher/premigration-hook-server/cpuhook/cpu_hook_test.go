@@ -63,8 +63,10 @@ var _ = Describe("Premigration Hook Server", func() {
 				Spec: v1.VirtualMachineInstanceSpec{
 					Domain: v1.DomainSpec{
 						CPU: &v1.CPU{
-							Cores:                 2,
-							DedicatedCPUPlacement: true,
+							Cores: 2,
+							CPUSource: v1.CPUSource{
+								DedicatedCPUPlacement: true,
+							},
 						},
 					},
 				},

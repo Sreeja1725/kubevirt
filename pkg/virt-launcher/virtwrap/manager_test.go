@@ -1504,7 +1504,10 @@ var _ = Describe("Manager", func() {
 			Entry("disabled if vmi is requesting Hugepages", &v1.Memory{Hugepages: &v1.Hugepages{PageSize: "1Gi"}}, false, nil, "false", "off"),
 			Entry("disabled if vmi is requesting Realtime", nil, false, &v1.CPU{Realtime: &v1.Realtime{}}, "false", "off"),
 			Entry("disabled if vmi is requesting DedicatedCPU", nil, false, &v1.CPU{
-				DedicatedCPUPlacement: true}, "false", "off"),
+				CPUSource: v1.CPUSource{
+					DedicatedCPUPlacement: true,
+				},
+			}, "false", "off"),
 			Entry("disabled if vmi has the disable free page reporting annotation", nil, false, nil, "true", "off"),
 		)
 
@@ -3321,7 +3324,7 @@ var _ = Describe("Manager", func() {
 			func(archName string, assertFn func(*convertertypes.ConverterContext, error)) {
 				libvirtManager := manager.(*LibvirtDomainManager)
 				vmi.Spec.Architecture = archName
-				vmi.Spec.Domain.CPU = &v1.CPU{DedicatedCPUPlacement: true}
+				vmi.Spec.Domain.CPU = &v1.CPU{CPUSource: v1.CPUSource{DedicatedCPUPlacement: true}}
 				iommuFDFile, err := os.CreateTemp(GinkgoT().TempDir(), "iommufd-test")
 				Expect(err).ToNot(HaveOccurred())
 				DeferCleanup(iommuFDFile.Close)
@@ -3350,7 +3353,7 @@ var _ = Describe("Manager", func() {
 		)
 
 		It("should reject Grace conversion when the IOMMUFD file descriptor is unavailable", func() {
-			vmi.Spec.Domain.CPU = &v1.CPU{DedicatedCPUPlacement: true}
+			vmi.Spec.Domain.CPU = &v1.CPU{CPUSource: v1.CPUSource{DedicatedCPUPlacement: true}}
 			options := &cmdv1.VirtualMachineOptions{
 				VirtualMachineSMBios: &cmdv1.SMBios{},
 				ClusterConfig: &cmdv1.ClusterConfig{

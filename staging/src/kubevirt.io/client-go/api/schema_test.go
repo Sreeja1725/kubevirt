@@ -378,7 +378,9 @@ var _ = Describe("Schema", func() {
 					Policy: "disable",
 				},
 			},
-			DedicatedCPUPlacement: true,
+			CPUSource: v12.CPUSource{
+				DedicatedCPUPlacement: true,
+			},
 		}
 		exampleVMI.Spec.Networks = []v12.Network{
 			v12.Network{

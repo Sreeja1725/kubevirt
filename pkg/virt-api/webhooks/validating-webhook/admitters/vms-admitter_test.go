@@ -1463,8 +1463,10 @@ var _ = Describe("Validating VM Admitter", func() {
 			},
 				Entry("realtime is configured", func(vm *v1.VirtualMachine) {
 					vm.Spec.Template.Spec.Domain.CPU = &v1.CPU{
-						DedicatedCPUPlacement: true,
-						Realtime:              &v1.Realtime{},
+						CPUSource: v1.CPUSource{
+							DedicatedCPUPlacement: true,
+						},
+						Realtime: &v1.Realtime{},
 						NUMA: &v1.NUMA{
 							GuestMappingPassthrough: &v1.NUMAGuestMappingPassthrough{},
 						},
@@ -1487,7 +1489,9 @@ var _ = Describe("Validating VM Admitter", func() {
 				}),
 				Entry("guest mapping passthrough is configured", func(vm *v1.VirtualMachine) {
 					vm.Spec.Template.Spec.Domain.CPU = &v1.CPU{
-						DedicatedCPUPlacement: true,
+						CPUSource: v1.CPUSource{
+							DedicatedCPUPlacement: true,
+						},
 						NUMA: &v1.NUMA{
 							GuestMappingPassthrough: &v1.NUMAGuestMappingPassthrough{},
 						},

@@ -68,6 +68,12 @@
           }
         ],
         "dedicatedCpuPlacement": true,
+        "dra": [
+          {
+            "claimName": "claimNameValue",
+            "requestName": "requestNameValue"
+          }
+        ],
         "numa": {
           "guestMappingPassthrough": {}
         },

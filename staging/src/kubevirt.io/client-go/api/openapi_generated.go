@@ -360,6 +360,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"kubevirt.io/api/core/v1.CDRomTarget":                                                             schema_kubevirtio_api_core_v1_CDRomTarget(ref),
 		"kubevirt.io/api/core/v1.CPU":                                                                     schema_kubevirtio_api_core_v1_CPU(ref),
 		"kubevirt.io/api/core/v1.CPUFeature":                                                              schema_kubevirtio_api_core_v1_CPUFeature(ref),
+		"kubevirt.io/api/core/v1.CPUSource":                                                               schema_kubevirtio_api_core_v1_CPUSource(ref),
 		"kubevirt.io/api/core/v1.CPUTopology":                                                             schema_kubevirtio_api_core_v1_CPUTopology(ref),
 		"kubevirt.io/api/core/v1.CertConfig":                                                              schema_kubevirtio_api_core_v1_CertConfig(ref),
 		"kubevirt.io/api/core/v1.ChangedBlockTrackingSelectors":                                           schema_kubevirtio_api_core_v1_ChangedBlockTrackingSelectors(ref),
@@ -18984,6 +18985,25 @@ func schema_kubevirtio_api_core_v1_CPU(ref common.ReferenceCallback) common.Open
 							Format:      "",
 						},
 					},
+					"dra": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "DRA requests exclusive / topology-aware CPUs via a ResourceClaim listed in vmi.spec.resourceClaims[]. This is the DRA alternative to DedicatedCPUPlacement. Requires the CPUsWithDRA feature gate.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("kubevirt.io/api/core/v1.ClaimRequest"),
+									},
+								},
+							},
+						},
+					},
 					"numa": {
 						SchemaProps: spec.SchemaProps{
 							Description: "NUMA allows specifying settings for the guest NUMA topology",
@@ -19007,7 +19027,7 @@ func schema_kubevirtio_api_core_v1_CPU(ref common.ReferenceCallback) common.Open
 			},
 		},
 		Dependencies: []string{
-			"kubevirt.io/api/core/v1.CPUFeature", "kubevirt.io/api/core/v1.NUMA", "kubevirt.io/api/core/v1.Realtime"},
+			"kubevirt.io/api/core/v1.CPUFeature", "kubevirt.io/api/core/v1.ClaimRequest", "kubevirt.io/api/core/v1.NUMA", "kubevirt.io/api/core/v1.Realtime"},
 	}
 }
 
@@ -19037,6 +19057,46 @@ func schema_kubevirtio_api_core_v1_CPUFeature(ref common.ReferenceCallback) comm
 				Required: []string{"name"},
 			},
 		},
+	}
+}
+
+func schema_kubevirtio_api_core_v1_CPUSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"dedicatedCpuPlacement": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DedicatedCPUPlacement requests the scheduler to place the VirtualMachineInstance on a node with enough dedicated pCPUs and pin the vCPUs to it.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"dra": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "DRA requests exclusive / topology-aware CPUs via a ResourceClaim listed in vmi.spec.resourceClaims[]. This is the DRA alternative to DedicatedCPUPlacement. Requires the CPUsWithDRA feature gate.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("kubevirt.io/api/core/v1.ClaimRequest"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"kubevirt.io/api/core/v1.ClaimRequest"},
 	}
 }
 

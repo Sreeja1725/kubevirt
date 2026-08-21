@@ -195,7 +195,11 @@ var _ = Describe("Grace conversion preflight", func() {
 		return &v1.VirtualMachineInstance{
 			ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{}},
 			Spec: v1.VirtualMachineInstanceSpec{
-				Domain: v1.DomainSpec{CPU: &v1.CPU{DedicatedCPUPlacement: true}},
+				Domain: v1.DomainSpec{CPU: &v1.CPU{
+					CPUSource: v1.CPUSource{
+						DedicatedCPUPlacement: true,
+					},
+				}},
 			},
 		}
 	}

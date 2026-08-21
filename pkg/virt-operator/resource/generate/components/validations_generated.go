@@ -6477,6 +6477,29 @@ var CRDsValidation map[string]string = map[string]string{
                             DedicatedCPUPlacement requests the scheduler to place the VirtualMachineInstance on a node
                             with enough dedicated pCPUs and pin the vCPUs to it.
                           type: boolean
+                        dra:
+                          description: |-
+                            DRA requests exclusive / topology-aware CPUs via a ResourceClaim
+                            listed in vmi.spec.resourceClaims[]. This is the DRA alternative
+                            to DedicatedCPUPlacement. Requires the CPUsWithDRA feature gate.
+                          items:
+                            properties:
+                              claimName:
+                                description: |-
+                                  ClaimName references the name of an entry in the
+                                  VMI's spec.resourceClaims[] array. The referenced
+                                  entry may use either resourceClaimName or
+                                  resourceClaimTemplateName.
+                                type: string
+                              requestName:
+                                description: |-
+                                  RequestName specifies which request from the
+                                  ResourceClaim/ResourceClaimTemplate spec.devices.requests array this
+                                  claim request corresponds to.
+                                type: string
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
                         features:
                           description: Features specifies the CPU features list inside
                             the VMI.
@@ -12690,6 +12713,29 @@ var CRDsValidation map[string]string = map[string]string{
                     DedicatedCPUPlacement requests the scheduler to place the VirtualMachineInstance on a node
                     with enough dedicated pCPUs and pin the vCPUs to it.
                   type: boolean
+                dra:
+                  description: |-
+                    DRA requests exclusive / topology-aware CPUs via a ResourceClaim
+                    listed in vmi.spec.resourceClaims[]. This is the DRA alternative
+                    to DedicatedCPUPlacement. Requires the CPUsWithDRA feature gate.
+                  items:
+                    properties:
+                      claimName:
+                        description: |-
+                          ClaimName references the name of an entry in the
+                          VMI's spec.resourceClaims[] array. The referenced
+                          entry may use either resourceClaimName or
+                          resourceClaimTemplateName.
+                        type: string
+                      requestName:
+                        description: |-
+                          RequestName specifies which request from the
+                          ResourceClaim/ResourceClaimTemplate spec.devices.requests array this
+                          claim request corresponds to.
+                        type: string
+                    type: object
+                  type: array
+                  x-kubernetes-list-type: atomic
                 features:
                   description: Features specifies the CPU features list inside the
                     VMI.
@@ -16894,6 +16940,29 @@ var CRDsValidation map[string]string = map[string]string{
                     DedicatedCPUPlacement requests the scheduler to place the VirtualMachineInstance on a node
                     with enough dedicated pCPUs and pin the vCPUs to it.
                   type: boolean
+                dra:
+                  description: |-
+                    DRA requests exclusive / topology-aware CPUs via a ResourceClaim
+                    listed in vmi.spec.resourceClaims[]. This is the DRA alternative
+                    to DedicatedCPUPlacement. Requires the CPUsWithDRA feature gate.
+                  items:
+                    properties:
+                      claimName:
+                        description: |-
+                          ClaimName references the name of an entry in the
+                          VMI's spec.resourceClaims[] array. The referenced
+                          entry may use either resourceClaimName or
+                          resourceClaimTemplateName.
+                        type: string
+                      requestName:
+                        description: |-
+                          RequestName specifies which request from the
+                          ResourceClaim/ResourceClaimTemplate spec.devices.requests array this
+                          claim request corresponds to.
+                        type: string
+                    type: object
+                  type: array
+                  x-kubernetes-list-type: atomic
                 features:
                   description: Features specifies the CPU features list inside the
                     VMI.
@@ -19484,6 +19553,29 @@ var CRDsValidation map[string]string = map[string]string{
                             DedicatedCPUPlacement requests the scheduler to place the VirtualMachineInstance on a node
                             with enough dedicated pCPUs and pin the vCPUs to it.
                           type: boolean
+                        dra:
+                          description: |-
+                            DRA requests exclusive / topology-aware CPUs via a ResourceClaim
+                            listed in vmi.spec.resourceClaims[]. This is the DRA alternative
+                            to DedicatedCPUPlacement. Requires the CPUsWithDRA feature gate.
+                          items:
+                            properties:
+                              claimName:
+                                description: |-
+                                  ClaimName references the name of an entry in the
+                                  VMI's spec.resourceClaims[] array. The referenced
+                                  entry may use either resourceClaimName or
+                                  resourceClaimTemplateName.
+                                type: string
+                              requestName:
+                                description: |-
+                                  RequestName specifies which request from the
+                                  ResourceClaim/ResourceClaimTemplate spec.devices.requests array this
+                                  claim request corresponds to.
+                                type: string
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
                         features:
                           description: Features specifies the CPU features list inside
                             the VMI.
@@ -24649,6 +24741,29 @@ var CRDsValidation map[string]string = map[string]string{
                                     DedicatedCPUPlacement requests the scheduler to place the VirtualMachineInstance on a node
                                     with enough dedicated pCPUs and pin the vCPUs to it.
                                   type: boolean
+                                dra:
+                                  description: |-
+                                    DRA requests exclusive / topology-aware CPUs via a ResourceClaim
+                                    listed in vmi.spec.resourceClaims[]. This is the DRA alternative
+                                    to DedicatedCPUPlacement. Requires the CPUsWithDRA feature gate.
+                                  items:
+                                    properties:
+                                      claimName:
+                                        description: |-
+                                          ClaimName references the name of an entry in the
+                                          VMI's spec.resourceClaims[] array. The referenced
+                                          entry may use either resourceClaimName or
+                                          resourceClaimTemplateName.
+                                        type: string
+                                      requestName:
+                                        description: |-
+                                          RequestName specifies which request from the
+                                          ResourceClaim/ResourceClaimTemplate spec.devices.requests array this
+                                          claim request corresponds to.
+                                        type: string
+                                    type: object
+                                  type: array
+                                  x-kubernetes-list-type: atomic
                                 features:
                                   description: Features specifies the CPU features
                                     list inside the VMI.
@@ -30325,6 +30440,29 @@ var CRDsValidation map[string]string = map[string]string{
                                         DedicatedCPUPlacement requests the scheduler to place the VirtualMachineInstance on a node
                                         with enough dedicated pCPUs and pin the vCPUs to it.
                                       type: boolean
+                                    dra:
+                                      description: |-
+                                        DRA requests exclusive / topology-aware CPUs via a ResourceClaim
+                                        listed in vmi.spec.resourceClaims[]. This is the DRA alternative
+                                        to DedicatedCPUPlacement. Requires the CPUsWithDRA feature gate.
+                                      items:
+                                        properties:
+                                          claimName:
+                                            description: |-
+                                              ClaimName references the name of an entry in the
+                                              VMI's spec.resourceClaims[] array. The referenced
+                                              entry may use either resourceClaimName or
+                                              resourceClaimTemplateName.
+                                            type: string
+                                          requestName:
+                                            description: |-
+                                              RequestName specifies which request from the
+                                              ResourceClaim/ResourceClaimTemplate spec.devices.requests array this
+                                              claim request corresponds to.
+                                            type: string
+                                        type: object
+                                      type: array
+                                      x-kubernetes-list-type: atomic
                                     features:
                                       description: Features specifies the CPU features
                                         list inside the VMI.

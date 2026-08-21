@@ -1723,8 +1723,10 @@ var _ = Describe("Template", func() {
 								DisableHotplug: true,
 							},
 							CPU: &v1.CPU{
-								Cores:                 2,
-								DedicatedCPUPlacement: true,
+								Cores: 2,
+								CPUSource: v1.CPUSource{
+									DedicatedCPUPlacement: true,
+								},
 							},
 						},
 					},
@@ -1772,7 +1774,9 @@ var _ = Describe("Template", func() {
 				}
 				if dedicatedCpu {
 					vmi.Spec.Domain.CPU = &v1.CPU{
-						DedicatedCPUPlacement: true,
+						CPUSource: v1.CPUSource{
+							DedicatedCPUPlacement: true,
+						},
 					}
 				}
 				res := sidecarResources(&vmi, clusterConfig)
@@ -1842,9 +1846,11 @@ var _ = Describe("Template", func() {
 								DisableHotplug: true,
 							},
 							CPU: &v1.CPU{
-								Cores:                 requestedCores,
-								Threads:               1,
-								DedicatedCPUPlacement: true,
+								Cores:   requestedCores,
+								Threads: 1,
+								CPUSource: v1.CPUSource{
+									DedicatedCPUPlacement: true,
+								},
 								IsolateEmulatorThread: true,
 							},
 						},
@@ -3911,7 +3917,9 @@ var _ = Describe("Template", func() {
 				}
 				if dedicatedCpu {
 					vmi.Spec.Domain.CPU = &v1.CPU{
-						DedicatedCPUPlacement: true,
+						CPUSource: v1.CPUSource{
+							DedicatedCPUPlacement: true,
+						},
 					}
 				}
 				res := virtiofs.ResourcesForVirtioFSContainer(dedicatedCpu, quaranteedQos, clusterConfig)
@@ -5034,10 +5042,12 @@ var _ = Describe("Template", func() {
 					},
 				}
 				vmi.Spec.Domain.CPU = &v1.CPU{
-					Cores:                 1,
-					Sockets:               1,
-					Threads:               1,
-					DedicatedCPUPlacement: true,
+					Cores:   1,
+					Sockets: 1,
+					Threads: 1,
+					CPUSource: v1.CPUSource{
+						DedicatedCPUPlacement: true,
+					},
 					NUMA:                  &v1.NUMA{},
 					IsolateEmulatorThread: true,
 					Realtime:              &v1.Realtime{},
@@ -5830,7 +5840,11 @@ var _ = Describe("Template", func() {
 						Spec: v1.VirtualMachineInstanceSpec{
 							Domain: v1.DomainSpec{
 								Resources: resources,
-								CPU:       &v1.CPU{DedicatedCPUPlacement: withDedicatedCPU},
+								CPU: &v1.CPU{
+									CPUSource: v1.CPUSource{
+										DedicatedCPUPlacement: withDedicatedCPU,
+									},
+								},
 							},
 						},
 					}
