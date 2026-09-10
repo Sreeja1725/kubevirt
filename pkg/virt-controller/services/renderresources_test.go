@@ -3,9 +3,6 @@ package services
 import (
 	"fmt"
 
-	"kubevirt.io/kubevirt/pkg/libvmi"
-	virtconfig "kubevirt.io/kubevirt/pkg/virt-config"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,7 +13,10 @@ import (
 
 	v1 "kubevirt.io/api/core/v1"
 
+	"kubevirt.io/kubevirt/pkg/dra"
+	"kubevirt.io/kubevirt/pkg/libvmi"
 	"kubevirt.io/kubevirt/pkg/testutils"
+	virtconfig "kubevirt.io/kubevirt/pkg/virt-config"
 )
 
 var _ = Describe("Resource pod spec renderer", func() {
@@ -475,6 +475,19 @@ var _ = Describe("Resource pod spec renderer", func() {
 			Expect(claims).To(HaveLen(1))
 			Expect(claims[0].Name).To(Equal("net-claim"))
 			Expect(claims[0].Request).To(Equal("net-request"))
+		})
+
+		It("should add CPU DRA claim to container resources", func() {
+			vmi := libvmi.New(
+				libvmi.WithName("testvmi"),
+				libvmi.WithDedicatedCPUPlacement(),
+			)
+
+			rr = NewResourceRenderer(nil, nil, WithCPUsDRA(vmi))
+
+			Expect(rr.Claims()).To(Equal([]kubev1.ResourceClaim{
+				{Name: dra.CPUClaimRef(vmi.Name)},
+			}))
 		})
 
 		It("Unified functions should not interfere with other renderer options", func() {

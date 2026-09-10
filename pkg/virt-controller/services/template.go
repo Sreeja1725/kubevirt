@@ -45,6 +45,7 @@ import (
 	"kubevirt.io/client-go/log"
 	"kubevirt.io/client-go/precond"
 
+	"kubevirt.io/kubevirt/pkg/dra"
 	drautil "kubevirt.io/kubevirt/pkg/dra"
 	"kubevirt.io/kubevirt/pkg/hypervisor"
 	"kubevirt.io/kubevirt/pkg/pointer"
@@ -397,6 +398,8 @@ func (t *TemplateService) renderLaunchManifest(vmi *v1.VirtualMachineInstance, i
 	domain := precond.MustNotBeEmpty(vmi.GetObjectMeta().GetName())
 	namespace := precond.MustNotBeEmpty(vmi.GetObjectMeta().GetNamespace())
 
+	cpuClaimErrCh := startCPUResourceClaimCreate(vmi, t.clusterConfig, t.virtClient)
+
 	var userId int64 = util.RootUser
 
 	nonRoot := vmitrait.IsNonRoot(vmi)
@@ -710,6 +713,11 @@ func (t *TemplateService) renderLaunchManifest(vmi *v1.VirtualMachineInstance, i
 		}
 
 	}
+
+	if err := waitCPUResourceClaimCreate(cpuClaimErrCh); err != nil {
+		return nil, err
+	}
+
 	pod := k8sv1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "virt-launcher-" + domain + "-",
@@ -790,6 +798,32 @@ func (t *TemplateService) renderLaunchManifest(vmi *v1.VirtualMachineInstance, i
 	pod.Spec.Volumes = append(pod.Spec.Volumes, sidecarVolumes...)
 
 	return &pod, nil
+}
+
+func startCPUResourceClaimCreate(vmi *v1.VirtualMachineInstance, clusterConfig *virtconfig.ClusterConfig, virtClient kubecli.KubevirtClient) chan error {
+	if !clusterConfig.CPUsWithDRAGateEnabled() || !vmi.IsCPUDedicated() {
+		return nil
+	}
+
+	// Bind the claim on the VMI first so pod rendering can use Spec.ResourceClaims
+	// without racing the API call.
+	dra.EnsureCPUResourceClaimOnVMI(vmi)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- dra.CreateCPUResourceClaim(vmi, virtClient)
+	}()
+	return errCh
+}
+
+func waitCPUResourceClaimCreate(errCh chan error) error {
+	if errCh == nil {
+		return nil
+	}
+	if err := <-errCh; err != nil {
+		return fmt.Errorf("failed to create CPU ResourceClaim: %v", err)
+	}
+	return nil
 }
 
 func (t *TemplateService) newNodeSelectorRenderer(vmi *v1.VirtualMachineInstance) *NodeSelectorRenderer {
@@ -1671,6 +1705,9 @@ func (t *TemplateService) VMIResourcePredicates(vmi *v1.VirtualMachineInstance, 
 			NewVMIResourceRule(func(vmi *v1.VirtualMachineInstance) bool {
 				return t.clusterConfig.NetworkDevicesWithDRAGateEnabled() && vmispec.HasDRANetwork(vmi.Spec.Networks)
 			}, WithNetworksDRA(vmi.Spec.Networks)),
+			NewVMIResourceRule(func(vmi *v1.VirtualMachineInstance) bool {
+				return t.clusterConfig.CPUsWithDRAGateEnabled() && vmi.IsCPUDedicated()
+			}, WithCPUsDRA(vmi)),
 			NewVMIResourceRule(util.IsSEVVMI, WithSEV()),
 			NewVMIResourceRule(util.IsTDXVMI, WithTDX()),
 			NewVMIResourceRule(reservation.HasVMIPersistentReservation, WithPersistentReservation()),

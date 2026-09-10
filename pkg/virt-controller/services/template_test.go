@@ -50,6 +50,7 @@ import (
 	"kubevirt.io/client-go/kubecli"
 	fakenetworkclient "kubevirt.io/client-go/networkattachmentdefinitionclient/fake"
 
+	"kubevirt.io/kubevirt/pkg/dra"
 	"kubevirt.io/kubevirt/pkg/hypervisor"
 	"kubevirt.io/kubevirt/pkg/pointer"
 
@@ -154,6 +155,7 @@ var _ = Describe("Template", func() {
 			virtClient.EXPECT().NetworkClient().Return(networkClient).AnyTimes()
 			k8sClient := k8sfake.NewSimpleClientset()
 			virtClient.EXPECT().CoreV1().Return(k8sClient.CoreV1()).AnyTimes()
+			virtClient.EXPECT().ResourceV1().Return(k8sClient.ResourceV1()).AnyTimes()
 			// Sadly, we cannot pass desired attachment objects into
 			// Clientset constructor because UnsafeGuessKindToResource
 			// calculates incorrect object kind (without dashes). Instead
@@ -261,6 +263,52 @@ var _ = Describe("Template", func() {
 				containers := pod.Spec.Containers
 				Expect(containers[0].Name).To(Equal(computeContainerName))
 				Expect(containers[0].Resources.Claims).To(BeEmpty())
+			})
+		})
+
+		Context("DRA CPU resource claims", func() {
+			const (
+				computeContainerName = "compute"
+				vmiName              = "testvmi"
+			)
+
+			newVMIWithDedicatedCPU := func(name string) *v1.VirtualMachineInstance {
+				return libvmi.New(
+					libvmi.WithName(name),
+					libvmi.WithNamespace("default"),
+					libvmi.WithDedicatedCPUPlacement(),
+					libvmi.WithCPUCount(2, 1, 1),
+				)
+			}
+
+			It("should add CPU DRA claim to compute container resources when feature gate is enabled", func() {
+				config, kvStore, svc = configFactory(defaultArch)
+				enableFeatureGate(featuregate.CPUsWithDRAGate)
+
+				pod, err := svc.RenderLaunchManifest(newVMIWithDedicatedCPU(vmiName))
+				Expect(err).ToNot(HaveOccurred())
+				containers := pod.Spec.Containers
+				Expect(containers[0].Name).To(Equal(computeContainerName))
+				Expect(containers[0].Resources.Claims).To(Equal([]k8sv1.ResourceClaim{
+					{Name: dra.CPUClaimRef(vmiName)},
+				}))
+				Expect(pod.Spec.ResourceClaims).To(Equal([]k8sv1.PodResourceClaim{
+					{
+						Name:              dra.CPUClaimRef(vmiName),
+						ResourceClaimName: ptr.To(dra.CPUResourceClaimName(vmiName)),
+					},
+				}))
+			})
+
+			It("should not add CPU DRA claim to compute container resources when feature gate is disabled", func() {
+				config, _, svc = configFactory(defaultArch)
+
+				pod, err := svc.RenderLaunchManifest(newVMIWithDedicatedCPU(vmiName))
+				Expect(err).ToNot(HaveOccurred())
+				containers := pod.Spec.Containers
+				Expect(containers[0].Name).To(Equal(computeContainerName))
+				Expect(containers[0].Resources.Claims).To(BeEmpty())
+				Expect(pod.Spec.ResourceClaims).To(BeEmpty())
 			})
 		})
 
