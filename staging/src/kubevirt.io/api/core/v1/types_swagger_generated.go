@@ -1119,6 +1119,15 @@ func (DeveloperConfiguration) SwaggerDoc() map[string]string {
 		"cpuAllocationRatio":              "For each requested virtual CPU, CPUAllocationRatio defines how much physical CPU to request per VMI\nfrom the hosting node. The value is in fraction of a CPU thread (or core on non-hyperthreaded nodes).\nFor example, a value of 1 means 1 physical CPU thread per VMI CPU thread.\nA value of 100 would be 1% of a physical thread allocated for each requested VMI thread.\nThis option has no effect on VMIs that request dedicated CPUs. More information at:\nhttps://kubevirt.io/user-guide/operations/node_overcommit/#node-cpu-allocation-ratio\nDefaults to 10",
 		"minimumClusterTSCFrequency":      "Allow overriding the automatically determined minimum TSC frequency of the cluster\nand fixate the minimum to this frequency.",
 		"clusterProfiler":                 "Enable the ability to pprof profile KubeVirt control plane",
+		"cpuDRA":                          "CPUDRA holds the settings for provisioning the CPUs of dedicated CPU VMs through DRA.",
+	}
+}
+
+func (CPUDRAConfiguration) SwaggerDoc() map[string]string {
+	return map[string]string{
+		"":        "CPUDRAConfiguration holds settings for CPUs provisioned through DRA.",
+		"enabled": "Enabled controls whether the CPUs of dedicated CPU VMs are provisioned through DRA,\ndefaults to False. It requires a CPU DRA driver to be installed on the cluster and is what\nturns the feature on: the CPUsWithDRA feature gate only unlocks it while the feature is\nalpha, so the decision keeps working once the gate is enabled by default or removed.\n+nullable",
+		"groupBy": "GroupBy declares how the CPU DRA driver groups host CPUs into devices and must match the\ngroupBy setting of the installed driver. KubeVirt uses it to decide how the ResourceClaim\nit synthesizes for a dedicated CPU VM separates its per-socket requests: Socket and NUMA\nkeep each guest socket on a distinct host socket or NUMA node respectively, while Machine\nleaves the requests unconstrained because the driver publishes a single device per host.\nDefaults to NUMA.\n+optional\n+kubebuilder:validation:Enum=Socket;NUMA;Machine",
 	}
 }
 

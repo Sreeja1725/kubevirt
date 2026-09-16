@@ -118,6 +118,9 @@ spec:
     developerConfiguration:
       clusterProfiler: true
       cpuAllocationRatio: -18
+      cpuDRA:
+        enabled: true
+        groupBy: groupByValue
       disabledFeatureGates:
       - disabledFeatureGatesValue
       diskVerification:

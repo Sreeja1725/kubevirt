@@ -115,7 +115,11 @@
             "nodeVerbosityKey": 18446744073709551603
           }
         },
-        "clusterProfiler": true
+        "clusterProfiler": true,
+        "cpuDRA": {
+          "enabled": true,
+          "groupBy": "groupByValue"
+        }
       },
       "emulatedMachines": [
         "emulatedMachinesValue"

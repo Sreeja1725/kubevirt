@@ -445,6 +445,32 @@ spec:
                           https://kubevirt.io/user-guide/operations/node_overcommit/#node-cpu-allocation-ratio
                           Defaults to 10
                         type: integer
+                      cpuDRA:
+                        description: CPUDRA holds the settings for provisioning the
+                          CPUs of dedicated CPU VMs through DRA.
+                        properties:
+                          enabled:
+                            description: |-
+                              Enabled controls whether the CPUs of dedicated CPU VMs are provisioned through DRA,
+                              defaults to False. It requires a CPU DRA driver to be installed on the cluster and is what
+                              turns the feature on: the CPUsWithDRA feature gate only unlocks it while the feature is
+                              alpha, so the decision keeps working once the gate is enabled by default or removed.
+                            nullable: true
+                            type: boolean
+                          groupBy:
+                            description: |-
+                              GroupBy declares how the CPU DRA driver groups host CPUs into devices and must match the
+                              groupBy setting of the installed driver. KubeVirt uses it to decide how the ResourceClaim
+                              it synthesizes for a dedicated CPU VM separates its per-socket requests: Socket and NUMA
+                              keep each guest socket on a distinct host socket or NUMA node respectively, while Machine
+                              leaves the requests unconstrained because the driver publishes a single device per host.
+                              Defaults to NUMA.
+                            enum:
+                            - Socket
+                            - NUMA
+                            - Machine
+                            type: string
+                        type: object
                       disabledFeatureGates:
                         description: |-
                           DisabledFeatureGates specifies a list of experimental feature gates to disable.
@@ -3983,6 +4009,32 @@ spec:
                           https://kubevirt.io/user-guide/operations/node_overcommit/#node-cpu-allocation-ratio
                           Defaults to 10
                         type: integer
+                      cpuDRA:
+                        description: CPUDRA holds the settings for provisioning the
+                          CPUs of dedicated CPU VMs through DRA.
+                        properties:
+                          enabled:
+                            description: |-
+                              Enabled controls whether the CPUs of dedicated CPU VMs are provisioned through DRA,
+                              defaults to False. It requires a CPU DRA driver to be installed on the cluster and is what
+                              turns the feature on: the CPUsWithDRA feature gate only unlocks it while the feature is
+                              alpha, so the decision keeps working once the gate is enabled by default or removed.
+                            nullable: true
+                            type: boolean
+                          groupBy:
+                            description: |-
+                              GroupBy declares how the CPU DRA driver groups host CPUs into devices and must match the
+                              groupBy setting of the installed driver. KubeVirt uses it to decide how the ResourceClaim
+                              it synthesizes for a dedicated CPU VM separates its per-socket requests: Socket and NUMA
+                              keep each guest socket on a distinct host socket or NUMA node respectively, while Machine
+                              leaves the requests unconstrained because the driver publishes a single device per host.
+                              Defaults to NUMA.
+                            enum:
+                            - Socket
+                            - NUMA
+                            - Machine
+                            type: string
+                        type: object
                       disabledFeatureGates:
                         description: |-
                           DisabledFeatureGates specifies a list of experimental feature gates to disable.

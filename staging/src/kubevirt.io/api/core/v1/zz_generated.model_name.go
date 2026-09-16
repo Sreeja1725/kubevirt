@@ -84,6 +84,11 @@ func (in CPU) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in CPUDRAConfiguration) OpenAPIModelName() string {
+	return "io.kubevirt.api.core.v1.CPUDRAConfiguration"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in CPUFeature) OpenAPIModelName() string {
 	return "io.kubevirt.api.core.v1.CPUFeature"
 }

@@ -3712,7 +3712,38 @@ type DeveloperConfiguration struct {
 
 	// Enable the ability to pprof profile KubeVirt control plane
 	ClusterProfiler bool `json:"clusterProfiler,omitempty"`
+
+	// CPUDRA holds the settings for provisioning the CPUs of dedicated CPU VMs through DRA.
+	CPUDRA *CPUDRAConfiguration `json:"cpuDRA,omitempty"`
 }
+
+// CPUDRAConfiguration holds settings for CPUs provisioned through DRA.
+type CPUDRAConfiguration struct {
+	// Enabled controls whether the CPUs of dedicated CPU VMs are provisioned through DRA,
+	// defaults to False. It requires a CPU DRA driver to be installed on the cluster and is what
+	// turns the feature on: the CPUsWithDRA feature gate only unlocks it while the feature is
+	// alpha, so the decision keeps working once the gate is enabled by default or removed.
+	// +nullable
+	Enabled *bool `json:"enabled,omitempty"`
+	// GroupBy declares how the CPU DRA driver groups host CPUs into devices and must match the
+	// groupBy setting of the installed driver. KubeVirt uses it to decide how the ResourceClaim
+	// it synthesizes for a dedicated CPU VM separates its per-socket requests: Socket and NUMA
+	// keep each guest socket on a distinct host socket or NUMA node respectively, while Machine
+	// leaves the requests unconstrained because the driver publishes a single device per host.
+	// Defaults to NUMA.
+	// +optional
+	// +kubebuilder:validation:Enum=Socket;NUMA;Machine
+	GroupBy CPUDRAGroupBy `json:"groupBy,omitempty"`
+}
+
+// CPUDRAGroupBy describes the granularity at which a CPU DRA driver publishes devices.
+type CPUDRAGroupBy string
+
+const (
+	CPUDRAGroupBySocket  CPUDRAGroupBy = "Socket"
+	CPUDRAGroupByNUMA    CPUDRAGroupBy = "NUMA"
+	CPUDRAGroupByMachine CPUDRAGroupBy = "Machine"
+)
 
 // LogVerbosity sets log verbosity level of various components
 type LogVerbosity struct {

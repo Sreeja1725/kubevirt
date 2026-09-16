@@ -378,6 +378,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		corev1.Bootloader{}.OpenAPIModelName():                                                            schema_kubevirtio_api_core_v1_Bootloader(ref),
 		corev1.CDRomTarget{}.OpenAPIModelName():                                                           schema_kubevirtio_api_core_v1_CDRomTarget(ref),
 		corev1.CPU{}.OpenAPIModelName():                                                                   schema_kubevirtio_api_core_v1_CPU(ref),
+		corev1.CPUDRAConfiguration{}.OpenAPIModelName():                                                   schema_kubevirtio_api_core_v1_CPUDRAConfiguration(ref),
 		corev1.CPUFeature{}.OpenAPIModelName():                                                            schema_kubevirtio_api_core_v1_CPUFeature(ref),
 		corev1.CPUTopology{}.OpenAPIModelName():                                                           schema_kubevirtio_api_core_v1_CPUTopology(ref),
 		corev1.CertConfig{}.OpenAPIModelName():                                                            schema_kubevirtio_api_core_v1_CertConfig(ref),
@@ -19289,6 +19290,33 @@ func schema_kubevirtio_api_core_v1_CPU(ref common.ReferenceCallback) common.Open
 	}
 }
 
+func schema_kubevirtio_api_core_v1_CPUDRAConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "CPUDRAConfiguration holds settings for CPUs provisioned through DRA.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"enabled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Enabled controls whether the CPUs of dedicated CPU VMs are provisioned through DRA, defaults to False. It requires a CPU DRA driver to be installed on the cluster and is what turns the feature on: the CPUsWithDRA feature gate only unlocks it while the feature is alpha, so the decision keeps working once the gate is enabled by default or removed.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"groupBy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "GroupBy declares how the CPU DRA driver groups host CPUs into devices and must match the groupBy setting of the installed driver. KubeVirt uses it to decide how the ResourceClaim it synthesizes for a dedicated CPU VM separates its per-socket requests: Socket and NUMA keep each guest socket on a distinct host socket or NUMA node respectively, while Machine leaves the requests unconstrained because the driver publishes a single device per host. Defaults to NUMA.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_kubevirtio_api_core_v1_CPUFeature(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -20460,11 +20488,17 @@ func schema_kubevirtio_api_core_v1_DeveloperConfiguration(ref common.ReferenceCa
 							Format:      "",
 						},
 					},
+					"cpuDRA": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CPUDRA holds the settings for provisioning the CPUs of dedicated CPU VMs through DRA.",
+							Ref:         ref(corev1.CPUDRAConfiguration{}.OpenAPIModelName()),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			corev1.DiskVerification{}.OpenAPIModelName(), corev1.LogVerbosity{}.OpenAPIModelName()},
+			corev1.CPUDRAConfiguration{}.OpenAPIModelName(), corev1.DiskVerification{}.OpenAPIModelName(), corev1.LogVerbosity{}.OpenAPIModelName()},
 	}
 }
 
