@@ -103,6 +103,50 @@ func GetNumberOfVCPUs(cpuSpec *v1.CPU) int64 {
 	return int64(vCPUs)
 }
 
+// SupplementalIOThreadHostCPUs returns host CPUs reserved for supplementalPool IO threads on dedicated CPU VMIs.
+func SupplementalIOThreadHostCPUs(vmi *v1.VirtualMachineInstance) int64 {
+	if vmi == nil || vmi.Spec.Domain.IOThreads == nil ||
+		vmi.Spec.Domain.IOThreads.SupplementalPoolThreadCount == nil {
+		return 0
+	}
+	return int64(*vmi.Spec.Domain.IOThreads.SupplementalPoolThreadCount)
+}
+
+// SupplementalPoolThreadCountForEmulatorParity returns supplementalPoolThreadCount when IOThreadsPolicy is
+// supplementalPool (used for EmulatorThreadCompleteToEvenParity accounting in virt-controller).
+func SupplementalPoolThreadCountForEmulatorParity(vmi *v1.VirtualMachineInstance) uint32 {
+	if vmi == nil || vmi.Spec.Domain.IOThreadsPolicy == nil ||
+		*vmi.Spec.Domain.IOThreadsPolicy != v1.IOThreadsPolicySupplementalPool ||
+		vmi.Spec.Domain.IOThreads == nil ||
+		vmi.Spec.Domain.IOThreads.SupplementalPoolThreadCount == nil {
+		return 0
+	}
+	return *vmi.Spec.Domain.IOThreads.SupplementalPoolThreadCount
+}
+
+// EmulatorThreadHostCPUs returns 1 or 2 host CPUs for the isolated emulator thread.
+// hostCPUsBeforeEmulator is the dedicated CPU total before adding the emulator (guest vCPUs + IO threads, or pod limits in the vcpus==0 path).
+func EmulatorThreadHostCPUs(vmi *v1.VirtualMachineInstance, hostCPUsBeforeEmulator int64) int64 {
+	if vmi == nil || vmi.Spec.Domain.CPU == nil || !vmi.Spec.Domain.CPU.IsolateEmulatorThread {
+		return 0
+	}
+
+	emulatorCPUs := int64(1)
+	if _, evenParity := vmi.Annotations[v1.EmulatorThreadCompleteToEvenParity]; evenParity {
+		additionalCPUs := SupplementalPoolThreadCountForEmulatorParity(vmi)
+		if (hostCPUsBeforeEmulator+int64(additionalCPUs))%2 == 0 {
+			emulatorCPUs = 2
+		}
+	}
+	return emulatorCPUs
+}
+
+// SupplementalDedicatedHostCPUs returns IO-thread and emulator host CPUs for dedicatedCpuPlacement (excluding guest vCPUs).
+func SupplementalDedicatedHostCPUs(vmi *v1.VirtualMachineInstance, guestVCPUs int64) int64 {
+	ioThreadCPUs := SupplementalIOThreadHostCPUs(vmi)
+	return ioThreadCPUs + EmulatorThreadHostCPUs(vmi, guestVCPUs+ioThreadCPUs)
+}
+
 // ParsePciAddress returns an array of PCI DBSF fields (domain, bus, slot, function)
 func ParsePciAddress(pciAddress string) ([]string, error) {
 	pciAddrRegx, err := regexp.Compile(PCI_ADDRESS_PATTERN)

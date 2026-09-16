@@ -21,11 +21,12 @@ package dra
 
 import (
 	k8sv1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
 	v1 "kubevirt.io/api/core/v1"
 )
 
-func ToPodResourceClaims(resourceClaims []v1.VirtualMachineInstanceResourceClaim) []k8sv1.PodResourceClaim {
+func toPodResourceClaims(resourceClaims []v1.VirtualMachineInstanceResourceClaim) []k8sv1.PodResourceClaim {
 	if len(resourceClaims) == 0 {
 		return nil
 	}
@@ -39,4 +40,43 @@ func ToPodResourceClaims(resourceClaims []v1.VirtualMachineInstanceResourceClaim
 		}
 	}
 	return podResourceClaims
+}
+
+func ShouldSynthesizeCPUResourceClaim(vmi *v1.VirtualMachineInstance) bool {
+	if !vmi.IsCPUDedicated() {
+		return false
+	}
+	cpu := vmi.Spec.Domain.CPU
+	if cpu != nil && cpu.NUMA != nil && cpu.NUMA.GuestMappingPassthrough != nil {
+		return false
+	}
+	return true
+}
+
+// PodResourceClaimsForVMI returns pod.spec.resourceClaims for the VMI, including a synthesized CPU
+// claim reference when synthesizeCPUClaim is true and the VMI qualifies.
+func PodResourceClaimsForVMI(vmi *v1.VirtualMachineInstance, synthesizeCPUClaim bool) []k8sv1.PodResourceClaim {
+	claims := toPodResourceClaims(vmi.Spec.ResourceClaims)
+	if !synthesizeCPUClaim || !ShouldSynthesizeCPUResourceClaim(vmi) {
+		return claims
+	}
+
+	refName := CPUClaimRef(vmi.Name)
+	if podResourceClaimNamed(claims, refName) {
+		return claims
+	}
+
+	return append(claims, k8sv1.PodResourceClaim{
+		Name:              refName,
+		ResourceClaimName: ptr.To(CPUResourceClaimName(vmi.Name)),
+	})
+}
+
+func podResourceClaimNamed(claims []k8sv1.PodResourceClaim, name string) bool {
+	for _, claim := range claims {
+		if claim.Name == name {
+			return true
+		}
+	}
+	return false
 }

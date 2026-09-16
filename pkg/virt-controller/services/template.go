@@ -383,6 +383,9 @@ func (t *TemplateService) renderLaunchManifest(vmi *v1.VirtualMachineInstance, i
 	domain := precond.MustNotBeEmpty(vmi.GetObjectMeta().GetName())
 	namespace := precond.MustNotBeEmpty(vmi.GetObjectMeta().GetNamespace())
 
+	synthesizeCPUResourceClaim := t.clusterConfig.CPUsWithDRAGateEnabled() && !tempPod
+	cpuClaimErrCh := startCPUResourceClaimCreate(vmi, synthesizeCPUResourceClaim, t.virtClient)
+
 	var userId int64 = util.RootUser
 
 	nonRoot := vmitrait.IsNonRoot(vmi)
@@ -685,6 +688,11 @@ func (t *TemplateService) renderLaunchManifest(vmi *v1.VirtualMachineInstance, i
 		}
 
 	}
+
+	if err := waitCPUResourceClaimCreate(cpuClaimErrCh); err != nil {
+		return nil, err
+	}
+
 	pod := k8sv1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "virt-launcher-" + domain + "-",
@@ -712,7 +720,7 @@ func (t *TemplateService) renderLaunchManifest(vmi *v1.VirtualMachineInstance, i
 			SchedulerName:                 vmi.Spec.SchedulerName,
 			Tolerations:                   vmi.Spec.Tolerations,
 			TopologySpreadConstraints:     vmi.Spec.TopologySpreadConstraints,
-			ResourceClaims:                drautil.ToPodResourceClaims(vmi.Spec.ResourceClaims),
+			ResourceClaims:                drautil.PodResourceClaimsForVMI(vmi, synthesizeCPUResourceClaim),
 		},
 	}
 
@@ -765,6 +773,28 @@ func (t *TemplateService) renderLaunchManifest(vmi *v1.VirtualMachineInstance, i
 	pod.Spec.Volumes = append(pod.Spec.Volumes, sidecarVolumes...)
 
 	return &pod, nil
+}
+
+func startCPUResourceClaimCreate(vmi *v1.VirtualMachineInstance, synthesizeCPUClaim bool, virtClient kubecli.KubevirtClient) chan error {
+	if !synthesizeCPUClaim || !drautil.ShouldSynthesizeCPUResourceClaim(vmi) {
+		return nil
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- drautil.CreateCPUResourceClaim(vmi, virtClient)
+	}()
+	return errCh
+}
+
+func waitCPUResourceClaimCreate(errCh chan error) error {
+	if errCh == nil {
+		return nil
+	}
+	if err := <-errCh; err != nil {
+		return fmt.Errorf("failed to create CPU ResourceClaim: %v", err)
+	}
+	return nil
 }
 
 func (t *TemplateService) newNodeSelectorRenderer(vmi *v1.VirtualMachineInstance) *NodeSelectorRenderer {
@@ -1622,19 +1652,12 @@ func (t *TemplateService) doesVMIRequireAutoCPULimits(vmi *v1.VirtualMachineInst
 
 func (t *TemplateService) VMIResourcePredicates(vmi *v1.VirtualMachineInstance, memoryOverhead resource.Quantity) VMIResourcePredicates {
 	withCPULimits := t.doesVMIRequireAutoCPULimits(vmi)
-	additionalCPUs := uint32(0)
-	if vmi.Spec.Domain.IOThreadsPolicy != nil &&
-		*vmi.Spec.Domain.IOThreadsPolicy == v1.IOThreadsPolicySupplementalPool &&
-		vmi.Spec.Domain.IOThreads != nil &&
-		vmi.Spec.Domain.IOThreads.SupplementalPoolThreadCount != nil {
-		additionalCPUs = *vmi.Spec.Domain.IOThreads.SupplementalPoolThreadCount
-	}
 	return VMIResourcePredicates{
 		vmi: vmi,
 		resourceRules: []VMIResourceRule{
 			// Run overcommit first to avoid overcommitting overhead memory
 			NewVMIResourceRule(emptyMemoryRequest, WithMemoryRequests(vmi.Spec.Domain.Memory, t.clusterConfig.GetMemoryOvercommit())),
-			NewVMIResourceRule(doesVMIRequireDedicatedCPU, WithCPUPinning(vmi, vmi.Annotations, additionalCPUs)),
+			NewVMIResourceRule(doesVMIRequireDedicatedCPU, WithCPUPinning(vmi)),
 			NewVMIResourceRule(not(doesVMIRequireDedicatedCPU), WithoutDedicatedCPU(vmi, t.clusterConfig.GetCPUAllocationRatio(), withCPULimits)),
 			NewVMIResourceRule(hasHugePages, WithHugePages(vmi.Spec.Domain.Memory, memoryOverhead)),
 			NewVMIResourceRule(not(hasHugePages), WithMemoryOverhead(vmi.Spec.Domain.Resources, memoryOverhead)),
@@ -1650,6 +1673,9 @@ func (t *TemplateService) VMIResourcePredicates(vmi *v1.VirtualMachineInstance, 
 			NewVMIResourceRule(func(vmi *v1.VirtualMachineInstance) bool {
 				return t.clusterConfig.NetworkDevicesWithDRAGateEnabled() && vmispec.HasDRANetwork(vmi.Spec.Networks)
 			}, WithNetworksDRA(vmi.Spec.Networks)),
+			NewVMIResourceRule(func(vmi *v1.VirtualMachineInstance) bool {
+				return t.clusterConfig.CPUsWithDRAGateEnabled() && drautil.ShouldSynthesizeCPUResourceClaim(vmi)
+			}, WithCPUsDRA(vmi)),
 			NewVMIResourceRule(util.IsSEVVMI, WithSEV()),
 			NewVMIResourceRule(util.IsTDXVMI, WithTDX()),
 			NewVMIResourceRule(reservation.HasVMIPersistentReservation, WithPersistentReservation()),
