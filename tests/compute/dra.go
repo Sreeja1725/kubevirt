@@ -740,6 +740,7 @@ func waitForVirtLauncherPod(vmi *v1.VirtualMachineInstance) *k8sv1.Pod {
 
 func waitForAllocatedCPUResourceClaim(vmi *v1.VirtualMachineInstance) *resourcev1.ResourceClaim {
 	var claim *resourcev1.ResourceClaim
+	EventuallyWithOffset(1, func(g Gomega) {
 		var err error
 		claim, err = kubevirt.Client().ResourceV1().ResourceClaims(vmi.Namespace).Get(
 			context.Background(), dra.CPUResourceClaimName(vmi.Name), metav1.GetOptions{},
