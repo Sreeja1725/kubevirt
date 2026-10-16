@@ -37,14 +37,12 @@ import (
 
 	v1 "kubevirt.io/api/core/v1"
 
-	"kubevirt.io/kubevirt/pkg/controller"
 	"kubevirt.io/kubevirt/pkg/dra"
 	"kubevirt.io/kubevirt/pkg/libvmi"
 	"kubevirt.io/kubevirt/pkg/pointer"
 
 	"kubevirt.io/kubevirt/pkg/virt-config/featuregate"
 	"kubevirt.io/kubevirt/tests/decorators"
-	"kubevirt.io/kubevirt/tests/events"
 	"kubevirt.io/kubevirt/tests/exec"
 	"kubevirt.io/kubevirt/tests/framework/kubevirt"
 	"kubevirt.io/kubevirt/tests/framework/matcher"
@@ -371,19 +369,12 @@ var _ = Describe("[sig-compute]CPU DRA", Serial, decorators.SigCompute, decorato
 				),
 			)
 
-			By("checking a migration attempt fails instead of hanging")
-			migration, err := kubevirt.Client().VirtualMachineInstanceMigration(vmi.Namespace).Create(
+			By("checking a migration attempt is rejected instead of hanging")
+			_, err := kubevirt.Client().VirtualMachineInstanceMigration(vmi.Namespace).Create(
 				ctx, libmigration.New(vmi.Name, vmi.Namespace), metav1.CreateOptions{},
 			)
-			Expect(err).ToNot(HaveOccurred())
-			Eventually(ctx, func(g Gomega) v1.VirtualMachineInstanceMigrationPhase {
-				current, err := kubevirt.Client().VirtualMachineInstanceMigration(migration.Namespace).Get(
-					ctx, migration.Name, metav1.GetOptions{},
-				)
-				g.Expect(err).ToNot(HaveOccurred())
-				return current.Status.Phase
-			}, timeout, pollingInterval).Should(Equal(v1.MigrationFailed))
-			events.ExpectEvent(migration, k8sv1.EventTypeWarning, controller.FailedMigrationReason)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(v1.VirtualMachineInstanceReasonCPUDRANotMigratable))
 
 			By("checking the VM kept running on its source node")
 			Expect(matcher.ThisVMI(vmi)()).To(matcher.BeRunning())
