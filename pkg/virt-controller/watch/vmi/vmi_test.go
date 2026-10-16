@@ -410,7 +410,7 @@ var _ = Describe("VirtualMachineInstance watcher", func() {
 				func(pod *k8sv1.Pod) []k8sv1.PodResourceClaim { return pod.Spec.ResourceClaims },
 				ContainElement(k8sv1.PodResourceClaim{
 					Name:              dra.CPUClaimRefName,
-					ResourceClaimName: pointer.P(dra.CPUResourceClaimName(vmi.Name)),
+					ResourceClaimName: new(dra.CPUResourceClaimName(vmi.Name)),
 				})))
 		})
 

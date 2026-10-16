@@ -640,7 +640,7 @@ var _ = Describe("Migration watcher", func() {
 			sourcePod := newSourcePodForVirtualMachine(vmi)
 			sourcePod.Spec.ResourceClaims = []k8sv1.PodResourceClaim{{
 				Name:              dra.CPUClaimRefName,
-				ResourceClaimName: pointer.P(dra.CPUResourceClaimName(vmi.Name)),
+				ResourceClaimName: new(dra.CPUResourceClaimName(vmi.Name)),
 			}}
 
 			addNode(newNode(vmi.Status.NodeName))
